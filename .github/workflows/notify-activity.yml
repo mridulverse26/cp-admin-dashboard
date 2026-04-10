@@ -5,7 +5,7 @@ on:
     types: [opened, closed]
     branches: [main, development]
   push:
-    branches: [main, development]
+    branches: ['**']
 
 jobs:
   notify:
@@ -34,10 +34,17 @@ jobs:
         run: |
           BRANCH="${{ github.ref_name }}"
           COMMIT_MSG="${{ github.event.head_commit.message }}"
+          CREATED="${{ github.event.created }}"
 
           if [ "$BRANCH" = "main" ]; then
             TAGS="warning"
-            MSG="Pushed to PRODUCTION: ${COMMIT_MSG}"
+            MSG="PRODUCTION push: ${COMMIT_MSG}"
+          elif [ "$CREATED" = "true" ]; then
+            TAGS="hammer_and_wrench"
+            MSG="New branch created: ${BRANCH} — ${COMMIT_MSG}"
+          elif [ "$BRANCH" = "development" ]; then
+            TAGS="arrow_up"
+            MSG="Pushed to development: ${COMMIT_MSG}"
           else
             TAGS="arrow_up"
             MSG="Pushed to ${BRANCH}: ${COMMIT_MSG}"
