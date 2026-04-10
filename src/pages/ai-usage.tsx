@@ -3,6 +3,12 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import { StatCard } from '@/components/stat-card';
 import { useAIUsage } from '@/hooks/use-admin';
 
+interface CenterUsage {
+  center: string;
+  tokens: number;
+  calls: number;
+}
+
 export function AiUsagePage() {
   const { data: ai, isLoading } = useAIUsage();
 
@@ -17,8 +23,10 @@ export function AiUsagePage() {
   const a = ai || {};
   const successRate = a.totalCalls > 0 ? Math.round((a.successCount / a.totalCalls) * 100) : 0;
   const byProvider = a.byProvider || [];
-  const byCenter = a.byCenter || [];
-  const byAction = a.byAction || [];
+  const byCenter: CenterUsage[] = a.byCenter || [];
+  const sortedByCenter = [...byCenter].sort((a, b) => b.tokens - a.tokens);
+  const maxCenterTokens = sortedByCenter.length > 0 ? sortedByCenter[0].tokens : 0;
+  const totalCenterTokens = byCenter.reduce((sum, c) => sum + c.tokens, 0);
   const daily = a.daily || [];
   const recentCalls = a.recentCalls || [];
 
@@ -81,6 +89,37 @@ export function AiUsagePage() {
           )}
         </div>
       </div>
+
+      {/* AI Usage by Center */}
+      {sortedByCenter.length > 0 && (
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 mb-6">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">AI Usage by Center</h3>
+          <div className="space-y-4">
+            {sortedByCenter.map((c) => {
+              const pct = maxCenterTokens > 0 ? Math.round((c.tokens / maxCenterTokens) * 100) : 0;
+              return (
+                <div key={c.center}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm text-[var(--text-primary)]">{c.center}</span>
+                    <span className="text-sm font-bold text-[var(--accent)]">{c.tokens.toLocaleString()} tkns</span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden bg-[var(--border)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 pt-4 border-t border-[var(--border)]">
+            <span className="text-xs text-[var(--text-secondary)]">
+              Total: {totalCenterTokens.toLocaleString()} tokens
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Daily Usage Chart */}
       {daily.length > 0 && (
