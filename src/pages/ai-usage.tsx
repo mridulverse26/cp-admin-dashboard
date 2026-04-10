@@ -24,7 +24,7 @@ export function AiUsagePage() {
   const successRate = a.totalCalls > 0 ? Math.round((a.successCount / a.totalCalls) * 100) : 0;
   const byProvider = a.byProvider || [];
   const byCenter: CenterUsage[] = a.byCenter || [];
-  const sortedByCenter = [...byCenter].sort((a, b) => b.tokens - a.tokens);
+  const sortedByCenter = [...byCenter].sort((x, y) => y.tokens - x.tokens);
   const maxCenterTokens = sortedByCenter.length > 0 ? sortedByCenter[0].tokens : 0;
   const totalCenterTokens = byCenter.reduce((sum, c) => sum + c.tokens, 0);
   const daily = a.daily || [];
