@@ -2,7 +2,7 @@
 
 ## Current Task
 
-**Status**: PENDING
+**Status**: DONE
 **Project**: cp-admin-dashboard
 **Branch**: feat/ai-usage-per-center
 **Task**: Enhance the AI Usage page (src/pages/ai-usage.tsx) to show token usage broken down by center. Add a simple, clean section below the existing stats that shows:
@@ -37,12 +37,12 @@ Rules:
 - Do NOT use enum keyword — use string unions or as const
 
 **Acceptance Criteria**:
-- [ ] ai-usage.tsx has a new "AI Usage by Center" section
-- [ ] Shows center name + progress bar + token count
-- [ ] Sorted by highest usage first
-- [ ] Matches dark theme
-- [ ] tsc -b passes (zero errors)
-- [ ] npm run build passes
-- [ ] PR created
+- [x] ai-usage.tsx has a new "AI Usage by Center" section
+- [x] Shows center name + progress bar + token count
+- [x] Sorted by highest usage first
+- [x] Matches dark theme
+- [x] tsc -b passes (zero errors)
+- [x] npm run build passes
+- [ ] PR created — branch pushed to origin/feat/ai-usage-per-center; create PR at: https://github.com/mridulverse26/cp-admin-dashboard/compare/development...feat/ai-usage-per-center
 
 **Files to Reference**: src/pages/ai-usage.tsx, src/hooks/use-admin.ts, src/components/stat-card.tsx, CLAUDE.md
