@@ -1,0 +1,57 @@
+name: Notify Activity
+
+on:
+  pull_request:
+    types: [opened, closed]
+    branches: [main, development]
+  push:
+    branches: ['**']
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify PR opened
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        run: |
+          curl -s \
+            -H "Title: cp-admin-dashboard" \
+            -H "Tags: mag" \
+            -d "PR #${{ github.event.pull_request.number }} opened: ${{ github.event.pull_request.title }} (by ${{ github.event.pull_request.user.login }})" \
+            ntfy.sh/classpulse-deploys-mridul
+
+      - name: Notify PR merged
+        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+        run: |
+          curl -s \
+            -H "Title: cp-admin-dashboard" \
+            -H "Tags: tada" \
+            -d "PR #${{ github.event.pull_request.number }} merged into ${{ github.event.pull_request.base.ref }}: ${{ github.event.pull_request.title }}" \
+            ntfy.sh/classpulse-deploys-mridul
+
+      - name: Notify push to branch
+        if: github.event_name == 'push'
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          CREATED="${{ github.event.created }}"
+
+          if [ "$BRANCH" = "main" ]; then
+            TAGS="warning"
+            MSG="PRODUCTION push: ${COMMIT_MSG}"
+          elif [ "$CREATED" = "true" ]; then
+            TAGS="hammer_and_wrench"
+            MSG="New branch created: ${BRANCH} — ${COMMIT_MSG}"
+          elif [ "$BRANCH" = "development" ]; then
+            TAGS="arrow_up"
+            MSG="Pushed to development: ${COMMIT_MSG}"
+          else
+            TAGS="arrow_up"
+            MSG="Pushed to ${BRANCH}: ${COMMIT_MSG}"
+          fi
+
+          curl -s \
+            -H "Title: cp-admin-dashboard" \
+            -H "Tags: ${TAGS}" \
+            -d "${MSG}" \
+            ntfy.sh/classpulse-deploys-mridul
