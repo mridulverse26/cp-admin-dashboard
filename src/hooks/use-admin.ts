@@ -73,3 +73,12 @@ export function useAIUsage() {
     queryFn: () => api.get('/ai-usage').then(r => r.data.data),
   });
 }
+
+export function useMonitor() {
+  return useQuery({
+    queryKey: ['admin-monitor'],
+    queryFn: () => api.get('/monitor').then(r => r.data.data),
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+  });
+}
