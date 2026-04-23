@@ -64,6 +64,46 @@ export function useCentersWithStudents() {
   });
 }
 
+export interface QuestionBankPdf {
+  id: string;
+  originalName: string;
+  s3Bucket: string;
+  s3Key: string;
+  fileSizeBytes: number | null;
+  pages: number | null;
+  status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED';
+  questionsFound: number;
+  questionsParsed: number;
+  questionsInserted: number;
+  topic: string | null;
+  processingError: string | null;
+  createdAt: string;
+}
+
+export interface QuestionBankCenterGroup {
+  centerId: string;
+  centerName: string;
+  centerSlug: string;
+  pdfCount: number;
+  totalQuestionsInserted: number;
+  pdfs: QuestionBankPdf[];
+}
+
+export function useQuestionBankPdfs() {
+  return useQuery<QuestionBankCenterGroup[]>({
+    queryKey: ['admin-question-bank-pdfs'],
+    queryFn: () => api.get('/question-bank').then(r => r.data.data),
+  });
+}
+
+export function syncQuestionBank(): Promise<{ scanned: number; inserted: number; alreadyKnown: number }> {
+  return api.post('/question-bank/sync').then(r => r.data.data);
+}
+
+export function fetchQuestionBankPdfUrl(id: string): Promise<{ url: string; expiresAt: string }> {
+  return api.get(`/question-bank/${id}/url`).then(r => r.data.data);
+}
+
 export function useUsers(params?: { role?: string; page?: number; limit?: number }) {
   return useQuery({
     queryKey: ['admin-users', params],
