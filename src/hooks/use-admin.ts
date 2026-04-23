@@ -104,6 +104,33 @@ export function fetchQuestionBankPdfUrl(id: string): Promise<{ url: string; expi
   return api.get(`/question-bank/${id}/url`).then(r => r.data.data);
 }
 
+export interface ParsedMcqOption {
+  letter: 'A' | 'B' | 'C' | 'D';
+  text: string;
+}
+
+export interface ParsedMcq {
+  number: number;
+  stem: string;
+  options: ParsedMcqOption[];
+  correctLetter: 'A' | 'B' | 'C' | 'D' | null;
+  answerSource: 'key' | 'ai' | 'manual' | null;
+}
+
+export interface ParsedQuestionsResponse {
+  file: string;
+  topic: string | null;
+  pages: number | null;
+  status: string;
+  totalBlocksFound: number;
+  questions: ParsedMcq[];
+  skipped: Array<{ number: number | null; reason: string }>;
+}
+
+export function fetchQuestionBankPdfQuestions(id: string): Promise<ParsedQuestionsResponse> {
+  return api.get(`/question-bank/${id}/questions`).then(r => r.data.data);
+}
+
 export function useUsers(params?: { role?: string; page?: number; limit?: number }) {
   return useQuery({
     queryKey: ['admin-users', params],
