@@ -120,7 +120,7 @@ function PdfsTable({ pdfs }: { pdfs: QuestionBankPdf[] }) {
         <table className="w-full text-left">
           <thead>
             <tr className="bg-[var(--bg-card-hover)]/40">
-              {['File', 'Size', 'Pages', 'Found', 'Parsed', 'Status', 'Uploaded', 'Actions'].map(h => (
+              {['File', 'Topic', 'Size', 'Pages', 'Found', 'Parsed', 'Status', 'Uploaded', 'Actions'].map(h => (
                 <th key={h} className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   {h}
                 </th>
@@ -135,6 +135,15 @@ function PdfsTable({ pdfs }: { pdfs: QuestionBankPdf[] }) {
                     <FileText size={13} className="text-[var(--text-tertiary)] shrink-0" />
                     {pdf.originalName}
                   </span>
+                </td>
+                <td className="px-4 py-2.5 text-[12px] text-[var(--text-primary)]">
+                  {pdf.topic ? (
+                    <span className="px-2 py-0.5 rounded bg-[var(--accent)]/10 text-[var(--accent)] text-[11px] font-medium whitespace-nowrap">
+                      {pdf.topic}
+                    </span>
+                  ) : (
+                    <span className="text-[var(--text-tertiary)]">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{formatSize(pdf.fileSizeBytes)}</td>
                 <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{pdf.pages ?? '—'}</td>
