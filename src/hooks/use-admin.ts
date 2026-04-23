@@ -60,7 +60,7 @@ export interface AdminCenterWithStudents {
 export function useCentersWithStudents() {
   return useQuery<AdminCenterWithStudents[]>({
     queryKey: ['admin-centers-with-students'],
-    queryFn: () => api.get('/centers/with-students').then(r => r.data.data),
+    queryFn: () => api.get('/centers-with-students').then(r => r.data.data),
   });
 }
 
