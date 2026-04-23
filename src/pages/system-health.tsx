@@ -1,5 +1,103 @@
-import { useMonitor } from '@/hooks/use-admin';
-import { Building2, Users, Activity, Zap, Server, Database, Clock, AlertTriangle, CheckCircle, RefreshCw, Wifi } from 'lucide-react';
+import { useMonitor, useOnlineUsers } from '@/hooks/use-admin';
+import type { AdminOnlineUser } from '@/hooks/use-admin';
+import { Building2, Users, Activity, Zap, Server, Database, Clock, AlertTriangle, CheckCircle, RefreshCw, Wifi, Flame } from 'lucide-react';
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const s = Math.max(0, Math.floor(diffMs / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+}
+
+function Avatar({ src, name }: { src: string | null; name: string | null }) {
+  const initial = (name || '?').trim().charAt(0).toUpperCase();
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name || ''}
+        className="w-8 h-8 rounded-full object-cover bg-[var(--bg-card-hover)] shrink-0"
+        onError={e => {
+          (e.currentTarget as HTMLImageElement).style.display = 'none';
+        }}
+      />
+    );
+  }
+  return (
+    <div className="w-8 h-8 rounded-full bg-[var(--bg-card-hover)] flex items-center justify-center text-[11px] font-semibold text-[var(--text-secondary)] shrink-0">
+      {initial}
+    </div>
+  );
+}
+
+function OnlineStudentsTable({ students }: { students: AdminOnlineUser[] }) {
+  if (students.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <Activity size={24} className="mx-auto mb-2 text-[var(--text-tertiary)]" />
+        <p className="text-[13px] text-[var(--text-secondary)]">No students online right now</p>
+        <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
+          Students active in the last 15 minutes will show up here
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="border-b border-[var(--border)]">
+            {['', 'Name', 'Phone', 'Email', 'Center', 'Class', 'Exam', 'XP', 'Streak', 'Last seen'].map(h => (
+              <th
+                key={h || 'avatar'}
+                className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {students.map(s => (
+            <tr key={s.id} className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-card-hover)] transition-colors">
+              <td className="px-4 py-2.5 w-10">
+                <Avatar src={s.avatar} name={s.name} />
+              </td>
+              <td className="px-4 py-2.5 text-[12px] font-medium text-[var(--text-primary)]">
+                <span className="inline-flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
+                  {s.name || '—'}
+                </span>
+              </td>
+              <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)] font-mono">{s.phone}</td>
+              <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{s.email || '—'}</td>
+              <td className="px-4 py-2.5 text-[12px] text-[var(--text-primary)]">
+                {s.centerName || '—'}
+                {s.centerSlug && (
+                  <span className="block text-[10px] text-[var(--text-tertiary)] font-mono">{s.centerSlug}</span>
+                )}
+              </td>
+              <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{s.grade || '—'}</td>
+              <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{s.targetExam || '—'}</td>
+              <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{s.xp ?? 0}</td>
+              <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">
+                <span className="inline-flex items-center gap-1">
+                  {(s.currentStreak ?? 0) > 0 && <Flame size={11} className="text-[#f59e0b]" />}
+                  {s.currentStreak ?? 0}
+                </span>
+              </td>
+              <td className="px-4 py-2.5 text-[11px] text-[var(--text-tertiary)]">{timeAgo(s.lastActiveAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
@@ -74,6 +172,8 @@ function AlarmDot({ ok }: { ok: boolean }) {
 
 export function SystemHealthPage() {
   const { data: m, isLoading, dataUpdatedAt, refetch, isFetching } = useMonitor();
+  const { data: onlineUsers, isFetching: isFetchingOnline } = useOnlineUsers();
+  const onlineStudents = (onlineUsers ?? []).filter(u => u.role === 'STUDENT');
 
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
 
@@ -119,6 +219,20 @@ export function SystemHealthPage() {
             <BigStat label="Total Students" value={m?.totalStudents ?? 0} icon={Users} color="#22c55e" sub={`+${m?.newUsersToday ?? 0} joined today`} />
             <BigStat label="Live Students" value={m?.liveStudents ?? 0} icon={Activity} color="#f59e0b" sub="Active in last 5 min" pulse={true} />
             <BigStat label="Tests Ongoing" value={m?.liveTestsOngoing ?? 0} icon={Zap} color="#ef4444" sub="In-progress right now" pulse={(m?.liveTestsOngoing ?? 0) > 0} />
+          </div>
+
+          {/* Row 1.5: Online Students */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)]">
+              Online Students
+            </div>
+            <span className="text-[10px] text-[var(--text-tertiary)]">
+              · Active in last 15 min · {onlineStudents.length} online
+              {isFetchingOnline && ' · refreshing…'}
+            </span>
+          </div>
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden mb-6">
+            <OnlineStudentsTable students={onlineStudents} />
           </div>
 
           {/* Row 2: Today's Activity */}
