@@ -71,8 +71,25 @@ export function useUsers(params?: { role?: string; page?: number; limit?: number
   });
 }
 
+export interface AdminOnlineUser {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string;
+  role: 'CENTER_OWNER' | 'TEACHER' | 'STUDENT' | 'PARENT';
+  lastActiveAt: string;
+  centerId: string | null;
+  centerName: string | null;
+  centerSlug: string | null;
+  avatar: string | null;
+  xp: number | null;
+  currentStreak: number | null;
+  targetExam: string | null;
+  grade: string | null;
+}
+
 export function useOnlineUsers() {
-  return useQuery({
+  return useQuery<AdminOnlineUser[]>({
     queryKey: ['admin-online'],
     queryFn: () => api.get('/users/online').then(r => r.data.data),
     refetchInterval: 15000,
