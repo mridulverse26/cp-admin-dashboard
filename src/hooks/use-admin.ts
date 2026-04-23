@@ -24,6 +24,46 @@ export function useCenterDetail(id: string) {
   });
 }
 
+export interface AdminStudentRow {
+  id: string;
+  name: string | null;
+  phone: string;
+  email: string | null;
+  avatar: string | null;
+  xp: number | null;
+  level: number | null;
+  currentStreak: number | null;
+  targetExam: string | null;
+  grade: string | null;
+  lastActiveAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminCenterWithStudents {
+  id: string;
+  name: string;
+  slug: string;
+  city: string | null;
+  plan: string;
+  isActive: boolean;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  createdAt: string;
+  ownerName: string | null;
+  ownerPhone: string | null;
+  ownerEmail: string | null;
+  ownerLastActiveAt: string | null;
+  studentCount: number;
+  students: AdminStudentRow[];
+}
+
+export function useCentersWithStudents() {
+  return useQuery<AdminCenterWithStudents[]>({
+    queryKey: ['admin-centers-with-students'],
+    queryFn: () => api.get('/centers/with-students').then(r => r.data.data),
+  });
+}
+
 export function useUsers(params?: { role?: string; page?: number; limit?: number }) {
   return useQuery({
     queryKey: ['admin-users', params],
