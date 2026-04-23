@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Building2, Users, FileText, BookOpen, Cpu, Activity } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, FileText, BookOpen, Cpu, Activity, LogOut } from 'lucide-react';
+import { logout } from '@/components/auth-gate';
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Overview' },
@@ -44,8 +45,15 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-5 py-4 border-t border-[var(--border)]">
-        <div className="text-[10px] text-[var(--text-tertiary)]">v0.1.0 - Dev Build</div>
+      <div className="px-3 py-3 border-t border-[var(--border)] space-y-2">
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)] transition-all"
+        >
+          <LogOut size={16} />
+          Sign out
+        </button>
+        <div className="px-3 text-[10px] text-[var(--text-tertiary)]">v0.1.0 - Dev Build</div>
       </div>
     </aside>
   );

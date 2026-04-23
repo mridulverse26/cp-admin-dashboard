@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthGate } from '@/components/auth-gate';
 import { Sidebar } from '@/components/sidebar';
 import { OverviewPage } from '@/pages/overview';
 import { CentersPage } from '@/pages/centers';
@@ -27,9 +28,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
+    <AuthGate>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <Routes>
           <Route element={<Shell />}>
             <Route index element={<OverviewPage />} />
             <Route path="centers" element={<CentersPage />} />
@@ -39,9 +41,10 @@ export default function App() {
             <Route path="question-bank" element={<QuestionBankPage />} />
             <Route path="ai" element={<AiUsagePage />} />
             <Route path="system" element={<SystemHealthPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </AuthGate>
   );
 }
