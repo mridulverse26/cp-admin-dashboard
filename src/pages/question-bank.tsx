@@ -22,6 +22,7 @@ import type {
   QuestionBankCenterGroup,
   QuestionBankPdf,
   ParsedMcq,
+  ParsedMcqTags,
   ParsedQuestionsResponse,
 } from '@/hooks/use-admin';
 
@@ -126,6 +127,62 @@ function AnswerSourceBadge({ source }: { source: 'key' | 'ai' | 'manual' | null 
   );
 }
 
+function Tag({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
+      style={{ backgroundColor: `${color}1f`, color }}
+    >
+      <span className="text-[var(--text-tertiary)]">{label}:</span>
+      <span className="font-semibold">{value}</span>
+    </span>
+  );
+}
+
+function TagsRow({ tags }: { tags: ParsedMcqTags }) {
+  const items: { label: string; value: string | number; color: string }[] = [];
+  const diffColor =
+    tags.difficulty === 'EASY' ? '#22c55e' : tags.difficulty === 'HARD' ? '#ef4444' : '#f59e0b';
+
+  if (tags.subject) items.push({ label: 'Subject', value: tags.subject, color: '#818cf8' });
+  if (tags.topic) items.push({ label: 'Topic', value: tags.topic, color: '#818cf8' });
+  if (tags.subTopic) items.push({ label: 'Sub-topic', value: tags.subTopic, color: '#a78bfa' });
+  if (tags.difficulty) items.push({ label: 'Difficulty', value: tags.difficulty, color: diffColor });
+  if (tags.board) items.push({ label: 'Board', value: tags.board, color: '#22c55e' });
+  if (tags.grade) items.push({ label: 'Grade', value: tags.grade, color: '#22c55e' });
+  if (tags.nature) items.push({ label: 'Nature', value: tags.nature, color: '#06b6d4' });
+  if (tags.ncertOrigin) items.push({ label: 'NCERT', value: tags.ncertOrigin.replace(/_/g, ' '), color: '#06b6d4' });
+  if (tags.ncertChapter) items.push({ label: 'Chapter', value: tags.ncertChapter, color: '#06b6d4' });
+  if (tags.competitiveExamRelevance && tags.competitiveExamRelevance.length > 0) {
+    items.push({ label: 'Exams', value: tags.competitiveExamRelevance.join(', '), color: '#f59e0b' });
+  }
+  if (tags.isPyq) {
+    const pyqLabel = [tags.pyqExam, tags.pyqYear].filter(Boolean).join(' ') || 'Yes';
+    items.push({ label: 'PYQ', value: pyqLabel, color: '#ec4899' });
+  }
+  if (tags.appearanceCount && tags.appearanceCount > 1) {
+    items.push({ label: 'Repeats', value: `${tags.appearanceCount}×`, color: '#ec4899' });
+  }
+  if (tags.teacherRating && tags.teacherRating > 0) {
+    items.push({ label: 'Rated', value: `${tags.teacherRating}★`, color: '#fbbf24' });
+  }
+  if (tags.confidenceScore !== null && tags.confidenceScore !== undefined) {
+    items.push({ label: 'Confidence', value: `${Math.round(tags.confidenceScore * 100)}%`, color: '#94a3b8' });
+  }
+  if (tags.reviewStatus && tags.reviewStatus !== 'AUTO_APPROVED') {
+    items.push({ label: 'Review', value: tags.reviewStatus.replace(/_/g, ' '), color: '#f59e0b' });
+  }
+
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-[var(--border)]">
+      {items.map((it, i) => (
+        <Tag key={i} label={it.label} value={it.value} color={it.color} />
+      ))}
+    </div>
+  );
+}
+
 function QuestionCard({ q }: { q: ParsedMcq }) {
   return (
     <div className="bg-[var(--bg-shell)] border border-[var(--border)] rounded-lg p-4">
@@ -165,6 +222,7 @@ function QuestionCard({ q }: { q: ParsedMcq }) {
           );
         })}
       </div>
+      {q.tags && <TagsRow tags={q.tags} />}
     </div>
   );
 }

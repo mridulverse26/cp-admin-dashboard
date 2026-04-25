@@ -109,12 +109,34 @@ export interface ParsedMcqOption {
   text: string;
 }
 
+export interface ParsedMcqTags {
+  subject: string | null;
+  topic: string | null;
+  subTopic: string | null;
+  difficulty: string | null;
+  board: string | null;
+  competitiveExamRelevance: string[] | null;
+  isPyq: boolean;
+  pyqExam: string | null;
+  pyqYear: string | null;
+  nature: string | null;
+  ncertOrigin: string | null;
+  ncertChapter: string | null;
+  ncertTopic: string | null;
+  grade: number | null;
+  appearanceCount: number | null;
+  teacherRating: number | null;
+  reviewStatus: string | null;
+  confidenceScore: number | null;
+}
+
 export interface ParsedMcq {
   number: number;
   stem: string;
   options: ParsedMcqOption[];
   correctLetter: 'A' | 'B' | 'C' | 'D' | null;
   answerSource: 'key' | 'ai' | 'manual' | null;
+  tags?: ParsedMcqTags;
 }
 
 export interface ParsedQuestionsResponse {
