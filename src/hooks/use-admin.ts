@@ -71,13 +71,26 @@ export interface QuestionBankPdf {
   s3Key: string;
   fileSizeBytes: number | null;
   pages: number | null;
-  status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED';
+  status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'NEEDS_REVIEW' | 'FAILED';
   questionsFound: number;
   questionsParsed: number;
   questionsInserted: number;
   topic: string | null;
   processingError: string | null;
   createdAt: string;
+  // v2 — populated by the teacher upload flow; null/0 for legacy admin-S3 sync.
+  subject?: string | null;
+  grade?: number | null;
+  board?: string | null;
+  folderId?: string | null;
+  folderName?: string | null;
+  uploadedBy?: string | null;
+  uploadedByName?: string | null;
+  processingStep?: string | null;
+  processingProgress?: number;
+  duplicatesMerged?: number;
+  needsReviewCount?: number;
+  uploadSource?: 'admin' | 'teacher';
 }
 
 export interface QuestionBankCenterGroup {
@@ -86,6 +99,7 @@ export interface QuestionBankCenterGroup {
   centerSlug: string;
   pdfCount: number;
   totalQuestionsInserted: number;
+  totalStorageBytes?: number;
   pdfs: QuestionBankPdf[];
 }
 
@@ -93,6 +107,21 @@ export function useQuestionBankPdfs() {
   return useQuery<QuestionBankCenterGroup[]>({
     queryKey: ['admin-question-bank-pdfs'],
     queryFn: () => api.get('/question-bank').then(r => r.data.data),
+  });
+}
+
+export interface QuestionBankBreakdown {
+  total: number;
+  bySubject: Array<{ subject: string; count: number }>;
+  byTopic: Array<{ subject: string; topic: string; count: number }>;
+}
+
+export function useQuestionBankBreakdown(centerId: string | null) {
+  return useQuery<QuestionBankBreakdown>({
+    queryKey: ['admin-question-bank-breakdown', centerId],
+    queryFn: () =>
+      api.get(`/question-bank/centers/${centerId}/breakdown`).then(r => r.data.data),
+    enabled: !!centerId,
   });
 }
 
