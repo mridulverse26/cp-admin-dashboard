@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   useQuestionBankPdfs,
+  useQuestionBankBreakdown,
   syncQuestionBank,
   fetchQuestionBankPdfUrl,
   fetchQuestionBankPdfQuestions,
@@ -22,32 +23,56 @@ import type {
   QuestionBankCenterGroup,
   QuestionBankPdf,
   ParsedMcq,
+  ParsedMcqTags,
   ParsedQuestionsResponse,
 } from '@/hooks/use-admin';
 
-function formatSize(bytes: number | null): string {
+function formatSize(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return '—';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function StatusPill({ status }: { status: QuestionBankPdf['status'] }) {
+const PROCESSING_STEP_LABELS: Record<string, string> = {
+  queued: 'Queued',
+  extracting_text: 'Extracting text',
+  detecting_structure: 'Detecting structure',
+  extracting_questions: 'Extracting questions',
+  predicting_answers: 'Predicting answers',
+  tagging: 'Tagging',
+  self_review: 'Self-review',
+  deduping: 'Dedup',
+  saving: 'Saving',
+  done: 'Done',
+};
+
+function StatusPill({ pdf }: { pdf: QuestionBankPdf }) {
   const styles: Record<QuestionBankPdf['status'], string> = {
     UPLOADED: 'bg-[#6366f118] text-[#818cf8]',
     PROCESSING: 'bg-[#f59e0b18] text-[#f59e0b]',
     PARSED: 'bg-[#22c55e18] text-[#22c55e]',
+    NEEDS_REVIEW: 'bg-[#a855f718] text-[#c084fc]',
     FAILED: 'bg-[#ef444418] text-[#ef4444]',
   };
   const labels: Record<QuestionBankPdf['status'], string> = {
-    UPLOADED: 'Not processed yet',
+    UPLOADED: 'Not processed',
     PROCESSING: 'Processing',
     PARSED: 'Parsed',
+    NEEDS_REVIEW: 'Needs review',
     FAILED: 'Failed',
   };
+  const stepLabel =
+    pdf.status === 'PROCESSING' && pdf.processingStep
+      ? PROCESSING_STEP_LABELS[pdf.processingStep] ?? pdf.processingStep
+      : null;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${styles[status]}`}>
-      {labels[status]}
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${styles[pdf.status]}`}
+      title={pdf.processingError ?? undefined}
+    >
+      {stepLabel ? `${labels[pdf.status]} · ${stepLabel}` : labels[pdf.status]}
     </span>
   );
 }
@@ -126,6 +151,62 @@ function AnswerSourceBadge({ source }: { source: 'key' | 'ai' | 'manual' | null 
   );
 }
 
+function Tag({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
+      style={{ backgroundColor: `${color}1f`, color }}
+    >
+      <span className="text-[var(--text-tertiary)]">{label}:</span>
+      <span className="font-semibold">{value}</span>
+    </span>
+  );
+}
+
+function TagsRow({ tags }: { tags: ParsedMcqTags }) {
+  const items: { label: string; value: string | number; color: string }[] = [];
+  const diffColor =
+    tags.difficulty === 'EASY' ? '#22c55e' : tags.difficulty === 'HARD' ? '#ef4444' : '#f59e0b';
+
+  if (tags.subject) items.push({ label: 'Subject', value: tags.subject, color: '#818cf8' });
+  if (tags.topic) items.push({ label: 'Topic', value: tags.topic, color: '#818cf8' });
+  if (tags.subTopic) items.push({ label: 'Sub-topic', value: tags.subTopic, color: '#a78bfa' });
+  if (tags.difficulty) items.push({ label: 'Difficulty', value: tags.difficulty, color: diffColor });
+  if (tags.board) items.push({ label: 'Board', value: tags.board, color: '#22c55e' });
+  if (tags.grade) items.push({ label: 'Grade', value: tags.grade, color: '#22c55e' });
+  if (tags.nature) items.push({ label: 'Nature', value: tags.nature, color: '#06b6d4' });
+  if (tags.ncertOrigin) items.push({ label: 'NCERT', value: tags.ncertOrigin.replace(/_/g, ' '), color: '#06b6d4' });
+  if (tags.ncertChapter) items.push({ label: 'Chapter', value: tags.ncertChapter, color: '#06b6d4' });
+  if (tags.competitiveExamRelevance && tags.competitiveExamRelevance.length > 0) {
+    items.push({ label: 'Exams', value: tags.competitiveExamRelevance.join(', '), color: '#f59e0b' });
+  }
+  if (tags.isPyq) {
+    const pyqLabel = [tags.pyqExam, tags.pyqYear].filter(Boolean).join(' ') || 'Yes';
+    items.push({ label: 'PYQ', value: pyqLabel, color: '#ec4899' });
+  }
+  if (tags.appearanceCount && tags.appearanceCount > 1) {
+    items.push({ label: 'Repeats', value: `${tags.appearanceCount}×`, color: '#ec4899' });
+  }
+  if (tags.teacherRating && tags.teacherRating > 0) {
+    items.push({ label: 'Rated', value: `${tags.teacherRating}★`, color: '#fbbf24' });
+  }
+  if (tags.confidenceScore !== null && tags.confidenceScore !== undefined) {
+    items.push({ label: 'Confidence', value: `${Math.round(tags.confidenceScore * 100)}%`, color: '#94a3b8' });
+  }
+  if (tags.reviewStatus && tags.reviewStatus !== 'AUTO_APPROVED') {
+    items.push({ label: 'Review', value: tags.reviewStatus.replace(/_/g, ' '), color: '#f59e0b' });
+  }
+
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-[var(--border)]">
+      {items.map((it, i) => (
+        <Tag key={i} label={it.label} value={it.value} color={it.color} />
+      ))}
+    </div>
+  );
+}
+
 function QuestionCard({ q }: { q: ParsedMcq }) {
   return (
     <div className="bg-[var(--bg-shell)] border border-[var(--border)] rounded-lg p-4">
@@ -165,6 +246,7 @@ function QuestionCard({ q }: { q: ParsedMcq }) {
           );
         })}
       </div>
+      {q.tags && <TagsRow tags={q.tags} />}
     </div>
   );
 }
@@ -253,12 +335,32 @@ function QuestionsModal({ pdfId, onClose }: { pdfId: string; onClose: () => void
             <div className="py-10 flex items-center justify-center">
               <div className="w-8 h-8 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : data.questions.length === 0 ? (
+          ) : data.questions.length === 0 && data.skipped.length === 0 ? (
             <div className="py-10 text-center text-sm text-[var(--text-tertiary)]">
               No questions parsed from this PDF yet
             </div>
           ) : (
             <div className="space-y-3">
+              {data.skipped.length > 0 && (
+                <details className="rounded-lg border border-[#f59e0b30] bg-[#f59e0b08] p-3">
+                  <summary className="cursor-pointer text-[12px] font-semibold text-[#f59e0b]">
+                    ⚠ {data.skipped.length} question{data.skipped.length === 1 ? '' : 's'} skipped during parsing
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    {data.skipped.map((s, i) => (
+                      <div
+                        key={i}
+                        className="text-[11px] text-[var(--text-secondary)] flex items-start gap-2"
+                      >
+                        <span className="font-mono text-[var(--text-tertiary)] shrink-0">
+                          {s.number != null ? `Q${s.number}` : '—'}
+                        </span>
+                        <span className="flex-1">{s.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
               {data.questions.map(q => (
                 <QuestionCard key={`${q.number}-${q.stem.slice(0, 30)}`} q={q} />
               ))}
@@ -306,12 +408,37 @@ function PdfsTable({ pdfs }: { pdfs: QuestionBankPdf[] }) {
           </thead>
           <tbody>
             {pdfs.map(pdf => (
-              <tr key={pdf.id} className="border-t border-[var(--border)]">
+              <tr key={pdf.id} className={`border-t border-[var(--border)] ${pdf.status === 'FAILED' ? 'bg-[#ef44440a]' : ''}`}>
                 <td className="px-4 py-2.5 text-[12px] font-medium text-[var(--text-primary)]">
-                  <span className="inline-flex items-center gap-2">
-                    <FileText size={13} className="text-[var(--text-tertiary)] shrink-0" />
-                    {pdf.originalName}
-                  </span>
+                  <div className="flex items-start gap-2">
+                    <FileText size={13} className="text-[var(--text-tertiary)] shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="truncate">{pdf.originalName}</div>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[10px] text-[var(--text-tertiary)]">
+                        {pdf.uploadSource === 'teacher' ? (
+                          <span className="px-1.5 py-0.5 rounded bg-[#22c55e15] text-[#22c55e] font-semibold">Teacher</span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded bg-[#6366f115] text-[#818cf8] font-semibold">Admin sync</span>
+                        )}
+                        {pdf.subject && (
+                          <span className="px-1.5 py-0.5 rounded bg-[var(--bg-card-hover)] text-[var(--text-secondary)] uppercase">
+                            {pdf.subject}
+                          </span>
+                        )}
+                        {pdf.folderName && (
+                          <span className="text-[var(--text-tertiary)]">📁 {pdf.folderName}</span>
+                        )}
+                        {pdf.uploadedByName && (
+                          <span className="text-[var(--text-tertiary)]">by {pdf.uploadedByName}</span>
+                        )}
+                      </div>
+                      {pdf.status === 'FAILED' && pdf.processingError && (
+                        <div className="mt-1 px-2 py-1 rounded bg-[#ef444415] text-[10px] text-[#ef4444] max-w-[420px]">
+                          ⚠ {pdf.processingError}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-2.5 text-[12px] text-[var(--text-primary)]">
                   {pdf.topic ? (
@@ -327,14 +454,26 @@ function PdfsTable({ pdfs }: { pdfs: QuestionBankPdf[] }) {
                 <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{pdf.questionsFound || '—'}</td>
                 <td className="px-4 py-2.5 text-[12px] text-[var(--text-secondary)]">{pdf.questionsParsed || '—'}</td>
                 <td className="px-4 py-2.5 text-[12px]">
-                  {pdf.questionsInserted > 0 ? (
-                    <span className="font-semibold text-[#22c55e]">{pdf.questionsInserted}</span>
-                  ) : (
-                    <span className="text-[var(--text-tertiary)]">—</span>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {pdf.questionsInserted > 0 ? (
+                      <span className="font-semibold text-[#22c55e]">{pdf.questionsInserted}</span>
+                    ) : (
+                      <span className="text-[var(--text-tertiary)]">—</span>
+                    )}
+                    {!!pdf.duplicatesMerged && pdf.duplicatesMerged > 0 && (
+                      <span title="Duplicates merged" className="px-1 py-0.5 rounded text-[9px] bg-[#f59e0b18] text-[#f59e0b] font-semibold">
+                        +{pdf.duplicatesMerged} dup
+                      </span>
+                    )}
+                    {!!pdf.needsReviewCount && pdf.needsReviewCount > 0 && (
+                      <span title="Questions flagged for review" className="px-1 py-0.5 rounded text-[9px] bg-[#a855f718] text-[#c084fc] font-semibold">
+                        {pdf.needsReviewCount} review
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-2.5">
-                  <StatusPill status={pdf.status} />
+                  <StatusPill pdf={pdf} />
                 </td>
                 <td className="px-4 py-2.5 text-[11px] text-[var(--text-tertiary)]">
                   {new Date(pdf.createdAt).toLocaleDateString()}
@@ -380,6 +519,63 @@ function PdfsTable({ pdfs }: { pdfs: QuestionBankPdf[] }) {
   );
 }
 
+function BreakdownPanel({ centerId }: { centerId: string }) {
+  const { data, isLoading } = useQuestionBankBreakdown(centerId);
+
+  if (isLoading) {
+    return (
+      <div className="px-4 py-3 text-[11px] text-[var(--text-tertiary)]">
+        Loading subject breakdown…
+      </div>
+    );
+  }
+  if (!data || data.total === 0) {
+    return null;
+  }
+
+  // Group topics by subject so we render them under each subject header
+  const topicsBySubject = new Map<string, Array<{ topic: string; count: number }>>();
+  for (const t of data.byTopic) {
+    const list = topicsBySubject.get(t.subject) ?? [];
+    list.push({ topic: t.topic, count: t.count });
+    topicsBySubject.set(t.subject, list);
+  }
+
+  return (
+    <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-card)]/40">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
+        Question distribution · {data.total} total
+      </div>
+      <div className="flex flex-col gap-2">
+        {data.bySubject.map(s => {
+          const topics = topicsBySubject.get(s.subject) ?? [];
+          return (
+            <div key={s.subject} className="flex flex-wrap items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded bg-[#6366f120] text-[#a5b4fc] text-[11px] font-bold uppercase tracking-wide">
+                {s.subject} · {s.count}
+              </span>
+              {topics.slice(0, 12).map(t => (
+                <span
+                  key={`${s.subject}-${t.topic}`}
+                  className="px-1.5 py-0.5 rounded text-[10px] bg-[var(--bg-card-hover)] text-[var(--text-secondary)]"
+                  title={`${t.topic}: ${t.count}`}
+                >
+                  {t.topic} <span className="text-[var(--text-tertiary)]">{t.count}</span>
+                </span>
+              ))}
+              {topics.length > 12 && (
+                <span className="text-[10px] text-[var(--text-tertiary)]">
+                  +{topics.length - 12} more
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CenterRow({
   center,
   expanded,
@@ -414,12 +610,18 @@ function CenterRow({
         </td>
         <td className="px-4 py-3 text-[13px] text-[var(--text-secondary)]">{center.pdfCount}</td>
         <td className="px-4 py-3 text-[13px] text-[var(--text-secondary)]">{center.totalQuestionsInserted}</td>
+        <td className="px-4 py-3 text-[13px] text-[var(--text-secondary)]">
+          {formatSize(center.totalStorageBytes)}
+        </td>
       </tr>
       {expanded && (
         <tr className="border-b border-[var(--border)]">
-          <td colSpan={4} className="bg-[var(--bg-shell)] p-0">
-            <div className="px-4 py-3 border-l-2 border-[var(--accent)]/40">
-              <PdfsTable pdfs={center.pdfs} />
+          <td colSpan={5} className="bg-[var(--bg-shell)] p-0">
+            <div className="border-l-2 border-[var(--accent)]/40">
+              <BreakdownPanel centerId={center.centerId} />
+              <div className="px-4 py-3">
+                <PdfsTable pdfs={center.pdfs} />
+              </div>
             </div>
           </td>
         </tr>
@@ -506,12 +708,15 @@ export function QuestionBankPage() {
                 <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Total questions
                 </th>
+                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                  Storage
+                </th>
               </tr>
             </thead>
             <tbody>
               {(groups ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-12 text-center">
+                  <td colSpan={5} className="px-4 py-12 text-center">
                     <FileText size={32} className="mx-auto mb-2 text-[var(--text-tertiary)]" />
                     <p className="text-sm text-[var(--text-secondary)]">No centers with PDFs yet</p>
                     <p className="text-[12px] text-[var(--text-tertiary)] mt-1">

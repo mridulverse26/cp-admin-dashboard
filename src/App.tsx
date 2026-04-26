@@ -8,6 +8,7 @@ import { CenterDetailPage } from '@/pages/center-detail';
 import { UsersPage } from '@/pages/users';
 import { AssessmentsPage } from '@/pages/assessments';
 import { QuestionBankPage } from '@/pages/question-bank';
+import { RequestsPage } from '@/pages/requests';
 import { AiUsagePage } from '@/pages/ai-usage';
 import { SystemHealthPage } from '@/pages/system-health';
 
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="users" element={<UsersPage />} />
             <Route path="assessments" element={<AssessmentsPage />} />
             <Route path="question-bank" element={<QuestionBankPage />} />
+            <Route path="requests" element={<RequestsPage />} />
             <Route path="ai" element={<AiUsagePage />} />
             <Route path="system" element={<SystemHealthPage />} />
             </Route>
