@@ -71,13 +71,26 @@ export interface QuestionBankPdf {
   s3Key: string;
   fileSizeBytes: number | null;
   pages: number | null;
-  status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED';
+  status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'NEEDS_REVIEW' | 'FAILED';
   questionsFound: number;
   questionsParsed: number;
   questionsInserted: number;
   topic: string | null;
   processingError: string | null;
   createdAt: string;
+  // v2 — populated by the teacher upload flow; null/0 for legacy admin-S3 sync.
+  subject?: string | null;
+  grade?: number | null;
+  board?: string | null;
+  folderId?: string | null;
+  folderName?: string | null;
+  uploadedBy?: string | null;
+  uploadedByName?: string | null;
+  processingStep?: string | null;
+  processingProgress?: number;
+  duplicatesMerged?: number;
+  needsReviewCount?: number;
+  uploadSource?: 'admin' | 'teacher';
 }
 
 export interface QuestionBankCenterGroup {
@@ -86,6 +99,7 @@ export interface QuestionBankCenterGroup {
   centerSlug: string;
   pdfCount: number;
   totalQuestionsInserted: number;
+  totalStorageBytes?: number;
   pdfs: QuestionBankPdf[];
 }
 
@@ -93,6 +107,21 @@ export function useQuestionBankPdfs() {
   return useQuery<QuestionBankCenterGroup[]>({
     queryKey: ['admin-question-bank-pdfs'],
     queryFn: () => api.get('/question-bank').then(r => r.data.data),
+  });
+}
+
+export interface QuestionBankBreakdown {
+  total: number;
+  bySubject: Array<{ subject: string; count: number }>;
+  byTopic: Array<{ subject: string; topic: string; count: number }>;
+}
+
+export function useQuestionBankBreakdown(centerId: string | null) {
+  return useQuery<QuestionBankBreakdown>({
+    queryKey: ['admin-question-bank-breakdown', centerId],
+    queryFn: () =>
+      api.get(`/question-bank/centers/${centerId}/breakdown`).then(r => r.data.data),
+    enabled: !!centerId,
   });
 }
 
@@ -109,12 +138,34 @@ export interface ParsedMcqOption {
   text: string;
 }
 
+export interface ParsedMcqTags {
+  subject: string | null;
+  topic: string | null;
+  subTopic: string | null;
+  difficulty: string | null;
+  board: string | null;
+  competitiveExamRelevance: string[] | null;
+  isPyq: boolean;
+  pyqExam: string | null;
+  pyqYear: string | null;
+  nature: string | null;
+  ncertOrigin: string | null;
+  ncertChapter: string | null;
+  ncertTopic: string | null;
+  grade: number | null;
+  appearanceCount: number | null;
+  teacherRating: number | null;
+  reviewStatus: string | null;
+  confidenceScore: number | null;
+}
+
 export interface ParsedMcq {
   number: number;
   stem: string;
   options: ParsedMcqOption[];
   correctLetter: 'A' | 'B' | 'C' | 'D' | null;
   answerSource: 'key' | 'ai' | 'manual' | null;
+  tags?: ParsedMcqTags;
 }
 
 export interface ParsedQuestionsResponse {
@@ -205,4 +256,79 @@ export function useMonitor() {
     refetchInterval: 30000,
     refetchIntervalInBackground: true,
   });
+}
+
+// ── Marketing — Leads + Applications ──────────────────────────────
+
+export type MarketingLeadStatus = 'NEW' | 'CONTACTED' | 'CLOSED';
+export type InternApplicationStatus = 'NEW' | 'SHORTLISTED' | 'REJECTED' | 'CLOSED';
+
+export interface MarketingLead {
+  id: string;
+  name: string;
+  phone: string;
+  whatsappOk: boolean;
+  instituteName: string;
+  studentCount: string;
+  classes: string[];
+  competitiveExams: string[] | null;
+  message: string | null;
+  source: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  status: MarketingLeadStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InternApplication {
+  id: string;
+  name: string;
+  phone: string;
+  whatsappOk: boolean;
+  email: string;
+  area: string;
+  areaCustom: string | null;
+  hasVehicle: boolean;
+  education: string;
+  startDate: string;
+  weeklyHours: string;
+  linkedinUrl: string | null;
+  gatekeeperStory: string;
+  whyClasspulse: string;
+  audioS3Key: string | null;
+  audioDurationSec: number | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  status: InternApplicationStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useLeads(status?: MarketingLeadStatus) {
+  return useQuery<MarketingLead[]>({
+    queryKey: ['admin-leads', status ?? 'all'],
+    queryFn: () => api.get('/leads', { params: status ? { status } : {} }).then(r => r.data.data),
+  });
+}
+
+export function useApplications(status?: InternApplicationStatus) {
+  return useQuery<InternApplication[]>({
+    queryKey: ['admin-applications', status ?? 'all'],
+    queryFn: () => api.get('/applications', { params: status ? { status } : {} }).then(r => r.data.data),
+  });
+}
+
+export function patchLead(id: string, body: { status?: MarketingLeadStatus; notes?: string | null }) {
+  return api.patch(`/leads/${id}`, body).then(r => r.data.data as MarketingLead);
+}
+
+export function patchApplication(id: string, body: { status?: InternApplicationStatus; notes?: string | null }) {
+  return api.patch(`/applications/${id}`, body).then(r => r.data.data as InternApplication);
+}
+
+export function fetchApplicationAudioUrl(id: string) {
+  return api.get(`/applications/${id}/audio-url`).then(r => r.data.data as { url: string; expiresAt: string } | null);
 }
