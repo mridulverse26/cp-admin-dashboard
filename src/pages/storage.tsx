@@ -1,8 +1,19 @@
-import { HardDrive, Database, FileBox, RefreshCw } from 'lucide-react';
+import { HardDrive, Database, FileBox, RefreshCw, PieChart, Building2 } from 'lucide-react';
 import { StatCard } from '@/components/stat-card';
-import { useAwsStorage } from '@/hooks/use-admin';
+import { useAwsStorage, useAwsStorageByCenter, type AwsCenterStorage } from '@/hooks/use-admin';
 
 const BUCKET_BAR_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#3b82f6', '#ec4899', '#14b8a6'];
+const CENTER_BAR_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#3b82f6', '#ec4899', '#14b8a6', '#a855f7', '#ef4444'];
+
+function planLabel(plan: string): string {
+  return plan.replace(/_/g, ' ');
+}
+
+function quotaBarColor(percentUsed: number): string {
+  if (percentUsed >= 90) return '#ef4444';
+  if (percentUsed >= 70) return '#f59e0b';
+  return '#22c55e';
+}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -25,6 +36,7 @@ function timeAgo(iso: string | null): string {
 
 export function StoragePage() {
   const { data, isLoading, isError, refetch, isFetching } = useAwsStorage();
+  const { data: byCenter, refetch: refetchByCenter } = useAwsStorageByCenter();
 
   if (isLoading) {
     return (
@@ -57,7 +69,7 @@ export function StoragePage() {
           </p>
         </div>
         <button
-          onClick={() => refetch()}
+          onClick={() => { refetch(); refetchByCenter(); }}
           disabled={isFetching}
           className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
         >
@@ -66,28 +78,135 @@ export function StoragePage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
-          label="Total Storage"
+          label="Used"
           value={formatBytes(data.totalBytes)}
           icon={HardDrive}
           color="#6366f1"
-          sub={`${data.buckets.length} buckets`}
+          sub={`${data.totalObjects.toLocaleString()} objects · ${data.buckets.length} buckets`}
         />
         <StatCard
-          label="Total Objects"
-          value={data.totalObjects.toLocaleString()}
-          icon={FileBox}
+          label="Total Quota"
+          value={byCenter ? formatBytes(byCenter.totals.totalQuotaBytes) : '—'}
+          icon={Database}
           color="#22c55e"
+          sub={byCenter ? `Across ${byCenter.totals.centerCount} centers` : 'Loading…'}
+        />
+        <StatCard
+          label="Utilization"
+          value={byCenter ? `${byCenter.totals.utilizationPct}%` : '—'}
+          icon={PieChart}
+          color={byCenter ? quotaBarColor(byCenter.totals.utilizationPct) : '#6366f1'}
+          sub={byCenter ? `${formatBytes(byCenter.totals.trackedBytes)} of quota in use` : undefined}
         />
         <StatCard
           label="Largest Bucket"
           value={data.buckets[0]?.name ?? '—'}
-          icon={Database}
+          icon={FileBox}
           color="#f59e0b"
           sub={data.buckets[0] ? formatBytes(data.buckets[0].sizeBytes) : undefined}
         />
       </div>
+
+      {byCenter && (
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Storage by Center</h3>
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                App-tracked uploads, grouped by coaching center
+              </p>
+            </div>
+            <Building2 size={16} className="text-[var(--text-tertiary)]" />
+          </div>
+
+          {byCenter.centers.length === 0 ? (
+            <p className="text-sm text-[var(--text-tertiary)] text-center py-8">No centers found.</p>
+          ) : (
+            <div className="space-y-4">
+              {byCenter.centers.map((c: AwsCenterStorage, idx: number) => {
+                const accent = CENTER_BAR_COLORS[idx % CENTER_BAR_COLORS.length];
+                const usedPct = c.percentUsed;
+                const barColor = quotaBarColor(usedPct);
+                return (
+                  <div key={c.id}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accent }} />
+                        <span className="text-sm font-medium text-[var(--text-primary)] truncate">{c.name}</span>
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--border)] text-[var(--text-secondary)] flex-shrink-0">
+                          {planLabel(c.plan)}
+                        </span>
+                        <span className="text-xs text-[var(--text-tertiary)] flex-shrink-0">
+                          {c.fileCount.toLocaleString()} files
+                        </span>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <span className="text-sm font-bold text-[var(--text-primary)]">
+                          {formatBytes(c.usedBytes)}
+                        </span>
+                        <span className="text-xs text-[var(--text-tertiary)] mx-1">/</span>
+                        <span className="text-xs text-[var(--text-secondary)]">
+                          {formatBytes(c.quotaBytes)}
+                        </span>
+                        <span className="text-xs ml-2 font-mono" style={{ color: barColor }}>
+                          {usedPct}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden bg-[var(--border)]">
+                      <div
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(100, usedPct)}%`, background: barColor }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {byCenter.totals.untrackedBytes > 0 && (
+                <div className="pt-3 mt-3 border-t border-[var(--border)]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[var(--text-tertiary)]" />
+                      <span className="text-sm font-medium text-[var(--text-secondary)]">System / Unattributed</span>
+                      <span className="text-[10px] text-[var(--text-tertiary)]">qbank, applications, backups, proctoring</span>
+                    </div>
+                    <span className="text-sm font-bold text-[var(--text-secondary)]">
+                      {formatBytes(byCenter.totals.untrackedBytes)}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden bg-[var(--border)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--text-tertiary)]"
+                      style={{
+                        width: `${
+                          byCenter.totals.bucketBytes > 0
+                            ? (byCenter.totals.untrackedBytes / byCenter.totals.bucketBytes) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 pt-4 border-t border-[var(--border)] flex items-center justify-between text-xs text-[var(--text-tertiary)]">
+            <span>
+              Tracked usage: <span className="text-[var(--text-secondary)] font-medium">{formatBytes(byCenter.totals.trackedBytes)}</span>
+            </span>
+            <span>
+              Total quota: <span className="text-[var(--text-secondary)] font-medium">{formatBytes(byCenter.totals.totalQuotaBytes)}</span>
+            </span>
+            <span>
+              Utilization: <span className="font-medium" style={{ color: quotaBarColor(byCenter.totals.utilizationPct) }}>{byCenter.totals.utilizationPct}%</span>
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 mb-6">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Buckets by Size</h3>
