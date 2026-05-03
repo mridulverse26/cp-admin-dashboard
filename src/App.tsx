@@ -10,6 +10,8 @@ import { AssessmentsPage } from '@/pages/assessments';
 import { QuestionBankPage } from '@/pages/question-bank';
 import { RequestsPage } from '@/pages/requests';
 import { AiUsagePage } from '@/pages/ai-usage';
+import { StoragePage } from '@/pages/storage';
+import { ExpenditurePage } from '@/pages/expenditure';
 import { SystemHealthPage } from '@/pages/system-health';
 
 const queryClient = new QueryClient({
@@ -42,6 +44,8 @@ export default function App() {
             <Route path="question-bank" element={<QuestionBankPage />} />
             <Route path="requests" element={<RequestsPage />} />
             <Route path="ai" element={<AiUsagePage />} />
+            <Route path="storage" element={<StoragePage />} />
+            <Route path="expenditure" element={<ExpenditurePage />} />
             <Route path="system" element={<SystemHealthPage />} />
             </Route>
           </Routes>
