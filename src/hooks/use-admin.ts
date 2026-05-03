@@ -332,3 +332,57 @@ export function patchApplication(id: string, body: { status?: InternApplicationS
 export function fetchApplicationAudioUrl(id: string) {
   return api.get(`/applications/${id}/audio-url`).then(r => r.data.data as { url: string; expiresAt: string } | null);
 }
+
+// ── AWS Monitoring (Storage + Spend) ──────────────────────────────
+
+export interface AwsBucketSnapshot {
+  name: string;
+  sizeBytes: number;
+  objectCount: number;
+  lastUpdated: string | null;
+}
+
+export interface AwsStorageReport {
+  buckets: AwsBucketSnapshot[];
+  totalBytes: number;
+  totalObjects: number;
+  lastUpdated: string;
+  cached: boolean;
+}
+
+export interface AwsSpendByDay {
+  date: string;
+  amount: number;
+}
+
+export interface AwsSpendByService {
+  service: string;
+  amount: number;
+}
+
+export interface AwsSpendReport {
+  daily: AwsSpendByDay[];
+  byService: AwsSpendByService[];
+  mtdTotal: number;
+  rangeTotal: number;
+  currency: string;
+  days: number;
+  lastUpdated: string;
+  cached: boolean;
+}
+
+export function useAwsStorage() {
+  return useQuery<AwsStorageReport>({
+    queryKey: ['admin-aws-storage'],
+    queryFn: () => api.get('/aws/storage').then(r => r.data.data),
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+export function useAwsSpend(days: number) {
+  return useQuery<AwsSpendReport>({
+    queryKey: ['admin-aws-spend', days],
+    queryFn: () => api.get('/aws/spend', { params: { days } }).then(r => r.data.data),
+    staleTime: 30 * 60 * 1000,
+  });
+}
