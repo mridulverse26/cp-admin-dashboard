@@ -386,3 +386,34 @@ export function useAwsSpend(days: number) {
     staleTime: 30 * 60 * 1000,
   });
 }
+
+export interface AwsCenterStorage {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  usedBytes: number;
+  quotaBytes: number;
+  fileCount: number;
+  percentUsed: number;
+}
+
+export interface AwsStorageByCenterReport {
+  centers: AwsCenterStorage[];
+  totals: {
+    trackedBytes: number;
+    totalQuotaBytes: number;
+    utilizationPct: number;
+    centerCount: number;
+    bucketBytes: number;
+    untrackedBytes: number;
+  };
+}
+
+export function useAwsStorageByCenter() {
+  return useQuery<AwsStorageByCenterReport>({
+    queryKey: ['admin-aws-storage-by-center'],
+    queryFn: () => api.get('/aws/storage/by-center').then(r => r.data.data),
+    staleTime: 30 * 60 * 1000,
+  });
+}
