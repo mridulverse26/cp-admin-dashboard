@@ -8,9 +8,6 @@ import {
   Building2,
   RefreshCw,
   X,
-  Check,
-  Sparkles,
-  KeyRound,
 } from 'lucide-react';
 import {
   useQuestionBankPdfs,
@@ -22,10 +19,9 @@ import {
 import type {
   QuestionBankCenterGroup,
   QuestionBankPdf,
-  ParsedMcq,
-  ParsedMcqTags,
   ParsedQuestionsResponse,
 } from '@/hooks/use-admin';
+import { QuestionCard } from '@/components/question-card';
 
 function formatSize(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return '—';
@@ -125,128 +121,6 @@ function PdfPreviewModal({ pdf, onClose }: { pdf: QuestionBankPdf; onClose: () =
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function AnswerSourceBadge({ source }: { source: 'key' | 'ai' | 'manual' | null }) {
-  if (!source) {
-    return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-shell)] text-[var(--text-tertiary)]">
-        no answer
-      </span>
-    );
-  }
-  const styles = {
-    key: { bg: 'bg-[#22c55e18]', fg: 'text-[#22c55e]', Icon: KeyRound, label: 'Answer key' },
-    ai: { bg: 'bg-[#f59e0b18]', fg: 'text-[#f59e0b]', Icon: Sparkles, label: 'AI predicted' },
-    manual: { bg: 'bg-[#6366f118]', fg: 'text-[#818cf8]', Icon: Check, label: 'Manual' },
-  }[source];
-  const Icon = styles.Icon;
-  return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${styles.bg} ${styles.fg}`}>
-      <Icon size={10} />
-      {styles.label}
-    </span>
-  );
-}
-
-function Tag({ label, value, color }: { label: string; value: string | number; color: string }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
-      style={{ backgroundColor: `${color}1f`, color }}
-    >
-      <span className="text-[var(--text-tertiary)]">{label}:</span>
-      <span className="font-semibold">{value}</span>
-    </span>
-  );
-}
-
-function TagsRow({ tags }: { tags: ParsedMcqTags }) {
-  const items: { label: string; value: string | number; color: string }[] = [];
-  const diffColor =
-    tags.difficulty === 'EASY' ? '#22c55e' : tags.difficulty === 'HARD' ? '#ef4444' : '#f59e0b';
-
-  if (tags.subject) items.push({ label: 'Subject', value: tags.subject, color: '#818cf8' });
-  if (tags.topic) items.push({ label: 'Topic', value: tags.topic, color: '#818cf8' });
-  if (tags.subTopic) items.push({ label: 'Sub-topic', value: tags.subTopic, color: '#a78bfa' });
-  if (tags.difficulty) items.push({ label: 'Difficulty', value: tags.difficulty, color: diffColor });
-  if (tags.board) items.push({ label: 'Board', value: tags.board, color: '#22c55e' });
-  if (tags.grade) items.push({ label: 'Grade', value: tags.grade, color: '#22c55e' });
-  if (tags.nature) items.push({ label: 'Nature', value: tags.nature, color: '#06b6d4' });
-  if (tags.ncertOrigin) items.push({ label: 'NCERT', value: tags.ncertOrigin.replace(/_/g, ' '), color: '#06b6d4' });
-  if (tags.ncertChapter) items.push({ label: 'Chapter', value: tags.ncertChapter, color: '#06b6d4' });
-  if (tags.competitiveExamRelevance && tags.competitiveExamRelevance.length > 0) {
-    items.push({ label: 'Exams', value: tags.competitiveExamRelevance.join(', '), color: '#f59e0b' });
-  }
-  if (tags.isPyq) {
-    const pyqLabel = [tags.pyqExam, tags.pyqYear].filter(Boolean).join(' ') || 'Yes';
-    items.push({ label: 'PYQ', value: pyqLabel, color: '#ec4899' });
-  }
-  if (tags.appearanceCount && tags.appearanceCount > 1) {
-    items.push({ label: 'Repeats', value: `${tags.appearanceCount}×`, color: '#ec4899' });
-  }
-  if (tags.teacherRating && tags.teacherRating > 0) {
-    items.push({ label: 'Rated', value: `${tags.teacherRating}★`, color: '#fbbf24' });
-  }
-  if (tags.confidenceScore !== null && tags.confidenceScore !== undefined) {
-    items.push({ label: 'Confidence', value: `${Math.round(tags.confidenceScore * 100)}%`, color: '#94a3b8' });
-  }
-  if (tags.reviewStatus && tags.reviewStatus !== 'AUTO_APPROVED') {
-    items.push({ label: 'Review', value: tags.reviewStatus.replace(/_/g, ' '), color: '#f59e0b' });
-  }
-
-  if (items.length === 0) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-[var(--border)]">
-      {items.map((it, i) => (
-        <Tag key={i} label={it.label} value={it.value} color={it.color} />
-      ))}
-    </div>
-  );
-}
-
-function QuestionCard({ q }: { q: ParsedMcq }) {
-  return (
-    <div className="bg-[var(--bg-shell)] border border-[var(--border)] rounded-lg p-4">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-            Q{q.number}
-          </span>
-          <AnswerSourceBadge source={q.answerSource} />
-        </div>
-      </div>
-      <div className="text-[13px] text-[var(--text-primary)] leading-relaxed mb-3 whitespace-pre-wrap">
-        {q.stem}
-      </div>
-      <div className="space-y-1.5">
-        {q.options.map(opt => {
-          const isCorrect = q.correctLetter === opt.letter;
-          return (
-            <div
-              key={opt.letter}
-              className={`flex items-start gap-2 px-3 py-2 rounded border text-[12px] ${
-                isCorrect
-                  ? 'bg-[#22c55e12] border-[#22c55e40] text-[var(--text-primary)]'
-                  : 'bg-transparent border-[var(--border)] text-[var(--text-secondary)]'
-              }`}
-            >
-              <span
-                className={`font-semibold min-w-[18px] ${
-                  isCorrect ? 'text-[#22c55e]' : 'text-[var(--text-tertiary)]'
-                }`}
-              >
-                {opt.letter}.
-              </span>
-              <span className="flex-1">{opt.text}</span>
-              {isCorrect && <Check size={13} className="text-[#22c55e] shrink-0 mt-0.5" />}
-            </div>
-          );
-        })}
-      </div>
-      {q.tags && <TagsRow tags={q.tags} />}
     </div>
   );
 }

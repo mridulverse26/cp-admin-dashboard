@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 export function useOverview() {
@@ -416,4 +416,158 @@ export function useAwsStorageByCenter() {
     queryFn: () => api.get('/aws/storage/by-center').then(r => r.data.data),
     staleTime: 30 * 60 * 1000,
   });
+}
+
+// ── Admin: cross-tenant Question Bank browse ──────────────────────────
+
+export type AdminQuestionScope = 'all' | 'global' | 'center';
+export type AdminReviewStatus = 'AUTO_APPROVED' | 'NEEDS_REVIEW' | 'REJECTED';
+export type AdminQuestionNature = 'CONCEPTUAL' | 'NUMERICAL' | 'FACTUAL' | 'APPLICATION';
+
+export interface AdminQuestionFilters {
+  scope?: AdminQuestionScope;
+  centerId?: string;
+  subject?: string;
+  topic?: string;
+  subTopic?: string;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  questionType?: 'mcq' | 'subjective';
+  board?: string;
+  grade?: number;
+  nature?: AdminQuestionNature;
+  source?: string;
+  reviewStatus?: AdminReviewStatus;
+  isPyq?: boolean;
+  pyqExam?: string;
+  pyqYear?: string;
+  competitiveExam?: string;
+  ncertOrigin?: string;
+  ncertChapter?: string;
+  hasImages?: boolean;
+  sourcePdfId?: string;
+  search?: string;
+  limit?: number;
+}
+
+export interface AdminBankQuestion {
+  id: string;
+  questionText: string;
+  questionType: 'mcq' | 'subjective';
+  options: { id: string; text: string; isCorrect: boolean }[] | null;
+  correctOption: string | null;
+  answerSource: 'key' | 'ai' | 'manual' | null;
+  marks: number;
+  difficulty: string;
+  subject: string;
+  topic: string | null;
+  subTopic: string | null;
+  board: string | null;
+  competitiveExamRelevance: string[] | null;
+  isPyq: boolean;
+  pyqExam: string | null;
+  pyqYear: string | null;
+  pyqSource: string | null;
+  source: string;
+  ncertChapter: string | null;
+  ncertTopic: string | null;
+  ncertOrigin: string | null;
+  nature: AdminQuestionNature | null;
+  grade: number | null;
+  estimatedTimeSec: number | null;
+  requiresFigure: boolean;
+  figureS3Url: string | null;
+  appearanceCount: number;
+  teacherRating: number;
+  reviewStatus: AdminReviewStatus;
+  confidenceScore: number | null;
+  sourcePdfId: string | null;
+  sourcePage: number | null;
+  isDuplicate: boolean;
+  coachingCenterId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // hydrated by the admin endpoint
+  centerName: string | null;
+  centerSlug: string | null;
+  sourcePdfName: string | null;
+}
+
+export interface AdminQuestionsPage {
+  items: AdminBankQuestion[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  count: number;
+}
+
+export interface AdminQuestionsStats {
+  filteredTotal: number;
+  totalAll: number;
+  totalGlobal: number;
+  bySubject: Array<{ subject: string; count: number }>;
+  byDifficulty: Array<{ difficulty: string; count: number }>;
+  byBoard: Array<{ board: string; count: number }>;
+  byCenter: Array<{ centerId: string | null; centerName: string; count: number }>;
+}
+
+export interface AdminQuestionFilterOptions {
+  subjects: string[];
+  topics: Array<{ subject: string; topic: string }>;
+  boards: string[];
+  pyqExams: string[];
+  pyqYears: string[];
+  ncertChapters: Array<{ subject: string; chapter: string }>;
+}
+
+function adminQuestionsParams(filters: AdminQuestionFilters): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(filters)) {
+    if (v === undefined || v === null || v === '') continue;
+    if (typeof v === 'boolean') out[k] = v ? 'true' : 'false';
+    else out[k] = String(v);
+  }
+  return out;
+}
+
+export function useAdminQuestions(filters: AdminQuestionFilters) {
+  return useInfiniteQuery<AdminQuestionsPage>({
+    queryKey: ['admin-bank-questions', filters],
+    queryFn: ({ pageParam }) =>
+      api
+        .get('/question-bank/all', {
+          params: { ...adminQuestionsParams(filters), cursor: pageParam || undefined },
+        })
+        .then(r => r.data.data),
+    initialPageParam: '' as string,
+    getNextPageParam: last => (last.hasMore ? last.nextCursor ?? undefined : undefined),
+  });
+}
+
+export function useAdminQuestionsStats(filters: AdminQuestionFilters) {
+  return useQuery<AdminQuestionsStats>({
+    queryKey: ['admin-bank-questions-stats', filters],
+    queryFn: () =>
+      api
+        .get('/question-bank/all/stats', { params: adminQuestionsParams(filters) })
+        .then(r => r.data.data),
+  });
+}
+
+export function useAdminQuestionsFilterOptions() {
+  return useQuery<AdminQuestionFilterOptions>({
+    queryKey: ['admin-bank-questions-filter-options'],
+    queryFn: () => api.get('/question-bank/all/filter-options').then(r => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function usePatchAdminQuestionReview() {
+  const queryClient = useQueryClient();
+  return async (id: string, reviewStatus: AdminReviewStatus) => {
+    const result = await api
+      .patch(`/question-bank/questions/${id}/review-status`, { reviewStatus })
+      .then(r => r.data.data as { id: string; reviewStatus: AdminReviewStatus });
+    queryClient.invalidateQueries({ queryKey: ['admin-bank-questions'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-bank-questions-stats'] });
+    return result;
+  };
 }
