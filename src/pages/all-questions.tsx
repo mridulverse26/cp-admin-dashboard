@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Search,
   ChevronDown,
@@ -224,8 +224,20 @@ function questionToParsed(q: AdminBankQuestion, fallbackNumber: number) {
 
 export function AllQuestionsPage() {
   const [filters, setFilters] = useState<AdminQuestionFilters>({ scope: 'all' });
+  const [searchDraft, setSearchDraft] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [reviewStatusOverrides, setReviewStatusOverrides] = useState<Record<string, AdminReviewStatus>>({});
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFilters(prev =>
+        prev.search === (searchDraft || undefined)
+          ? prev
+          : { ...prev, search: searchDraft || undefined },
+      );
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchDraft]);
 
   const { data: centers } = useCenters() as { data: CenterRow[] | undefined };
   const { data: filterOptions } = useAdminQuestionsFilterOptions();
@@ -248,7 +260,10 @@ export function AllQuestionsPage() {
   const applyScope = (scope: AdminQuestionScope, centerId?: string) =>
     setFilters(prev => ({ ...prev, scope, centerId }));
 
-  const reset = () => setFilters({ scope: filters.scope, centerId: filters.centerId });
+  const reset = () => {
+    setSearchDraft('');
+    setFilters({ scope: filters.scope, centerId: filters.centerId });
+  };
 
   const topicsForSubject = useMemo(() => {
     if (!filterOptions) return [];
@@ -353,8 +368,8 @@ export function AllQuestionsPage() {
             <input
               type="text"
               placeholder="Search question text…"
-              value={filters.search ?? ''}
-              onChange={e => set('search', e.target.value || undefined)}
+              value={searchDraft}
+              onChange={e => setSearchDraft(e.target.value)}
               className="flex-1 bg-transparent outline-none text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
             />
           </div>
