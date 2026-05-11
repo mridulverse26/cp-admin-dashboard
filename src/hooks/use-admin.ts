@@ -571,3 +571,81 @@ export function usePatchAdminQuestionReview() {
     return result;
   };
 }
+
+/* ────────────────── Per-tenant feature flags ────────────────── */
+
+export type FeatureFlagModuleKey =
+  | 'teachingPlan'
+  | 'resources'
+  | 'mcq'
+  | 'theory'
+  | 'dpp'
+  | 'homework'
+  | 'questionBank'
+  | 'doubts'
+  | 'parentReports'
+  | 'fees'
+  | 'leaderboard';
+
+export type FeatureFlagKey = `module.${FeatureFlagModuleKey}`;
+
+export interface FeatureFlagModuleDefinition {
+  key: FeatureFlagModuleKey;
+  flagKey: FeatureFlagKey;
+  label: string;
+  description: string;
+  group: 'daily' | 'assessments' | 'manage' | 'student';
+  defaultEnabled: boolean;
+  legacyKeys?: string[];
+}
+
+export interface CenterFeatureFlagsResponse {
+  centerId: string;
+  centerName: string;
+  centerSlug: string;
+  flags: Record<FeatureFlagKey, boolean>;
+  catalog: {
+    modules: FeatureFlagModuleDefinition[];
+    groups: { key: string; label: string; order: number }[];
+  };
+  lastChange: { changedBy: string; changedKeys: string[]; createdAt: string } | null;
+}
+
+export interface CenterFlagsSummary {
+  centerId: string;
+  centerName: string;
+  centerSlug: string;
+  enabledCount: number;
+  totalCount: number;
+  disabledModules: FeatureFlagModuleKey[];
+  lastChange: { changedBy: string; createdAt: string } | null;
+}
+
+export function useFeatureFlagSummaries() {
+  return useQuery<CenterFlagsSummary[]>({
+    queryKey: ['admin-feature-flags-summary'],
+    queryFn: () => api.get('/feature-flags').then(r => r.data.data),
+    staleTime: 60_000,
+  });
+}
+
+export function useCenterFeatureFlags(centerId: string | undefined) {
+  return useQuery<CenterFeatureFlagsResponse>({
+    queryKey: ['admin-center-feature-flags', centerId],
+    queryFn: () =>
+      api.get(`/centers/${centerId}/feature-flags`).then(r => r.data.data),
+    enabled: !!centerId,
+  });
+}
+
+export function usePatchCenterFeatureFlags() {
+  const queryClient = useQueryClient();
+  return async (centerId: string, flags: Record<string, boolean>, changedBy?: string) => {
+    const result = await api
+      .patch(`/centers/${centerId}/feature-flags`, { flags, changedBy })
+      .then(r => r.data.data as CenterFeatureFlagsResponse);
+    queryClient.invalidateQueries({ queryKey: ['admin-center-feature-flags', centerId] });
+    queryClient.invalidateQueries({ queryKey: ['admin-feature-flags-summary'] });
+    return result;
+  };
+}

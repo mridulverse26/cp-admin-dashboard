@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Building2, Users, FileText, BookOpen, Cpu, Activity, Inbox, HardDrive, DollarSign, LogOut, Library } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, FileText, BookOpen, Cpu, Activity, Inbox, HardDrive, DollarSign, LogOut, Library, ToggleLeft } from 'lucide-react';
 import { logout } from '@/components/auth-gate';
 
 const NAV = [
@@ -13,6 +13,7 @@ const NAV = [
   { to: '/ai', icon: Cpu, label: 'AI & OCR' },
   { to: '/storage', icon: HardDrive, label: 'Storage' },
   { to: '/expenditure', icon: DollarSign, label: 'Expenditure' },
+  { to: '/feature-flags', icon: ToggleLeft, label: 'Feature Flags' },
   { to: '/system', icon: Activity, label: 'System' },
 ];
 
