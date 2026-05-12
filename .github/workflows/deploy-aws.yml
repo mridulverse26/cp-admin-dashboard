@@ -7,8 +7,8 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  S3_BUCKET: classpulse-admin
-  CLOUDFRONT_DISTRIBUTION_ID: ERLXSY925DWR3
+  S3_BUCKET: cp-admin-snp
+  CLOUDFRONT_DISTRIBUTION_ID: ENQROJD100ULX
 
 jobs:
   deploy:
