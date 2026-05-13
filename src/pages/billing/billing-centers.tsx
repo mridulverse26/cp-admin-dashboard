@@ -1,30 +1,27 @@
 import { Link } from 'react-router-dom';
 import { Building2, ChevronRight, Search } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { useCenters } from '@/hooks/use-admin';
+import { useCentersWithStudents } from '@/hooks/use-admin';
+import type { AdminCenterWithStudents } from '@/hooks/use-admin';
 
-interface AdminCenter {
-  id: string;
-  name: string;
-  slug: string;
-  city: string | null;
-  plan: string;
-  isActive: boolean;
-  studentCount?: number;
-}
-
+/**
+ * Note: we use useCentersWithStudents (not useCenters) because the latter's
+ * /admin/centers response shape doesn't include `slug` — which is what the
+ * subscription detail page routes on. /admin/centers-with-students does
+ * include slug. Heavier payload but accurate.
+ */
 export default function BillingCentersPage() {
-  const { data, isLoading } = useCenters();
+  const { data, isLoading } = useCentersWithStudents();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
-    const list = ((data as AdminCenter[] | undefined) ?? []) as AdminCenter[];
+    const list = (data as AdminCenterWithStudents[] | undefined) ?? [];
     if (!query.trim()) return list;
     const q = query.toLowerCase();
     return list.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        c.slug.toLowerCase().includes(q) ||
+        (c.slug ?? '').toLowerCase().includes(q) ||
         (c.city ?? '').toLowerCase().includes(q),
     );
   }, [data, query]);
@@ -58,24 +55,37 @@ export default function BillingCentersPage() {
           {filtered.length === 0 && (
             <div className="px-5 py-12 text-center text-sm text-[var(--text-tertiary)]">No matches</div>
           )}
-          {filtered.map((c) => (
-            <Link
-              key={c.id}
-              to={`/billing/centers/${c.slug}`}
-              className="flex items-center gap-4 px-5 py-3.5 hover:bg-[var(--bg-card-hover)] group"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-[var(--text-primary)]">{c.name}</div>
-                <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                  {c.slug} {c.city ? `· ${c.city}` : ''}
+          {filtered.map((c) => {
+            const slug = c.slug;
+            if (!slug) {
+              return (
+                <div key={c.id} className="flex items-center gap-4 px-5 py-3.5 opacity-50">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-[var(--text-primary)]">{c.name}</div>
+                    <div className="text-xs text-amber-400 mt-0.5">No slug — billing unavailable</div>
+                  </div>
                 </div>
-              </div>
-              <div className="text-xs px-2 py-0.5 rounded bg-[var(--bg-shell)] text-[var(--text-secondary)] border border-[var(--border)]">
-                {c.plan}
-              </div>
-              <ChevronRight size={16} className="text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)]" />
-            </Link>
-          ))}
+              );
+            }
+            return (
+              <Link
+                key={c.id}
+                to={`/billing/centers/${slug}`}
+                className="flex items-center gap-4 px-5 py-3.5 hover:bg-[var(--bg-card-hover)] group"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-[var(--text-primary)]">{c.name}</div>
+                  <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                    {slug} {c.city ? `· ${c.city}` : ''} {c.studentCount != null ? `· ${c.studentCount} students` : ''}
+                  </div>
+                </div>
+                <div className="text-xs px-2 py-0.5 rounded bg-[var(--bg-shell)] text-[var(--text-secondary)] border border-[var(--border)]">
+                  {c.plan}
+                </div>
+                <ChevronRight size={16} className="text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)]" />
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
