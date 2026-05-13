@@ -67,7 +67,7 @@ export default function BillingLoginPage() {
             <ShieldCheck size={28} />
           </div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">Billing Admin</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">Restricted access — Mridul + Anant only</p>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">Sign in with your billing-admin account</p>
         </div>
 
         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6">
