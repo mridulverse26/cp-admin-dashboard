@@ -52,9 +52,24 @@ function buildClient(baseURL: string): AxiosInstance {
   return client;
 }
 
-export const billingApi = buildClient(
-  (import.meta.env.VITE_API_URL_PROD || API_BASES.prod) + '/api/v1',
-);
+/**
+ * Default env the read-path billing client talks to. Controlled by VITE_BILLING_API_ENV.
+ *
+ * For the 2026-06-15 launch we're in TEST mode against uat — backend has the
+ * billing tables on uat but not yet on prod. Once prod migration + env vars +
+ * seeding land, flip VITE_BILLING_API_ENV=prod (or remove the env entirely
+ * since the default below is 'uat' for now).
+ */
+const BILLING_API_ENV: EnvKey =
+  (import.meta.env.VITE_BILLING_API_ENV as EnvKey) || 'uat';
+
+export const billingApi = buildClient(API_BASES[BILLING_API_ENV] + '/api/v1');
+
+/** True while we're targeting a single env (uat-only test mode). When the
+ *  backend is fully prod-deployed, set VITE_BILLING_API_ENV=prod-broadcast
+ *  to re-enable the demo → uat → prod fan-out below. */
+const BILLING_BROADCAST_MODE: 'single' | 'demo-uat-prod' =
+  import.meta.env.VITE_BILLING_API_ENV === 'prod-broadcast' ? 'demo-uat-prod' : 'single';
 
 const envClients: Record<EnvKey, AxiosInstance> = {
   prod: buildClient(API_BASES.prod + '/api/v1'),
@@ -90,6 +105,33 @@ export async function broadcastBillingMutation<T>(
     onEnvProgress?: (env: EnvKey, ok: boolean, error?: string) => void;
   } = {},
 ): Promise<{ allOk: boolean; results: EnvResult<T>[]; primary: T | null }> {
+  // Test mode: only hit the env we're reading from. No fan-out, no prod gate.
+  // Flip VITE_BILLING_API_ENV=prod-broadcast once all 3 envs have the backend.
+  if (BILLING_BROADCAST_MODE === 'single') {
+    const env = BILLING_API_ENV;
+    try {
+      const resp = await request(envClient(env));
+      options.onEnvProgress?.(env, true);
+      return {
+        allOk: true,
+        results: [{ env, ok: true, data: resp.data.data, status: 200 }],
+        primary: resp.data.data,
+      };
+    } catch (e) {
+      const err = e as {
+        response?: { data?: { message?: string }; status?: number };
+        message?: string;
+      };
+      const error = err?.response?.data?.message ?? err?.message ?? 'unknown error';
+      options.onEnvProgress?.(env, false, error);
+      return {
+        allOk: false,
+        results: [{ env, ok: false, error, status: err?.response?.status }],
+        primary: null,
+      };
+    }
+  }
+
   const order: EnvKey[] = ['demo', 'uat', 'prod'];
   const results: EnvResult<T>[] = [];
 
