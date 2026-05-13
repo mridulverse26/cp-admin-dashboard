@@ -4,10 +4,12 @@ import { ChevronLeft, AlertTriangle, Save, RotateCcw, Info, X } from 'lucide-rea
 import {
   useCenterFeatureFlags,
   usePatchCenterFeatureFlags,
+  BroadcastError,
   type CenterFeatureFlagsResponse,
   type FeatureFlagKey,
   type FeatureFlagModuleDefinition,
 } from '@/hooks/use-admin';
+import { ALL_ENVS, type EnvKey } from '@/lib/multi-env';
 
 const GROUP_ORDER: Record<string, number> = {
   daily: 1,
@@ -112,12 +114,7 @@ function ModuleToggleRow({
         />
       </button>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <div className="text-sm font-medium text-[var(--text-primary)]">{module.label}</div>
-          <code className="text-[10px] text-[var(--text-tertiary)] bg-[var(--bg-shell)] px-1.5 py-0.5 rounded">
-            {module.flagKey}
-          </code>
-        </div>
+        <div className="text-sm font-medium text-[var(--text-primary)]">{module.label}</div>
         <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{module.description}</div>
       </div>
     </div>
@@ -132,6 +129,7 @@ export function FeatureFlagsDetailPage() {
   const [pending, setPending] = useState<PendingChanges>({});
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [envStatus, setEnvStatus] = useState<Partial<Record<EnvKey, 'ok' | 'fail'>>>({});
   const [confirmModule, setConfirmModule] = useState<FeatureFlagModuleDefinition | null>(null);
 
   const effective = useMemo(() => {
@@ -188,10 +186,17 @@ export function FeatureFlagsDetailPage() {
     if (!id || dirtyCount === 0) return;
     setSaving(true);
     setErrorMsg(null);
+    setEnvStatus({});
     try {
       await patchFlags(id, pending);
+      setEnvStatus({ prod: 'ok', uat: 'ok', demo: 'ok' });
       setPending({});
     } catch (err) {
+      if (err instanceof BroadcastError) {
+        const next: Partial<Record<EnvKey, 'ok' | 'fail'>> = {};
+        for (const r of err.results) next[r.env] = r.ok ? 'ok' : 'fail';
+        setEnvStatus(next);
+      }
       setErrorMsg((err as Error)?.message ?? 'Save failed');
     } finally {
       setSaving(false);
@@ -201,6 +206,7 @@ export function FeatureFlagsDetailPage() {
   const onReset = () => {
     setPending({});
     setErrorMsg(null);
+    setEnvStatus({});
   };
 
   if (isLoading) {
@@ -236,12 +242,10 @@ export function FeatureFlagsDetailPage() {
         </Link>
         <h2 className="text-xl font-semibold text-[var(--text-primary)]">{data.centerName}</h2>
         <p className="text-sm text-[var(--text-secondary)] mt-1">
-          Modules for{' '}
-          <code className="text-xs bg-[var(--bg-card)] px-1.5 py-0.5 rounded">{data.centerSlug}</code>
-          {data.lastChange && (
-            <span className="ml-2 text-[var(--text-tertiary)]">
-              · Last change by {data.lastChange.changedBy} ({new Date(data.lastChange.createdAt).toLocaleString()})
-            </span>
+          {data.lastChange ? (
+            <>Last change by {data.lastChange.changedBy} ({new Date(data.lastChange.createdAt).toLocaleString()})</>
+          ) : (
+            <>No changes yet</>
           )}
         </p>
       </div>
@@ -249,9 +253,9 @@ export function FeatureFlagsDetailPage() {
       <div className="flex items-start gap-3 p-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg">
         <Info size={16} className="text-[var(--accent)] mt-0.5 shrink-0" />
         <div className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Disabling a module hides it in the customer app (teacher + student nav) and returns
-          <code className="mx-1 bg-[var(--bg-shell)] px-1 py-0.5 rounded">403 MODULE_DISABLED</code>
-          from its backend endpoints. Existing data is preserved; re-enabling restores access immediately.
+          Turning a module off hides it from the teacher and student app and blocks its
+          backend endpoints. Existing data is preserved &mdash; turning it back on restores
+          access instantly.
         </div>
       </div>
 
@@ -311,12 +315,30 @@ export function FeatureFlagsDetailPage() {
         })}
 
       {/* Sticky save bar */}
-      {dirtyCount > 0 && (
+      {(dirtyCount > 0 || saving || errorMsg) && (
         <div className="fixed bottom-0 left-[220px] right-0 bg-[var(--bg-card)] border-t border-[var(--border)] px-8 py-4 flex items-center justify-between gap-4 z-40">
           <div className="text-sm text-[var(--text-secondary)]">
             <span className="font-semibold text-[var(--text-primary)]">{dirtyCount}</span> change{dirtyCount === 1 ? '' : 's'} pending
+            <span className="ml-3 text-xs text-[var(--text-tertiary)]">
+              {saving ? 'Broadcasting to ' : 'Targets: '}
+              {ALL_ENVS.map((e, i) => {
+                const s = envStatus[e];
+                const color =
+                  s === 'ok' ? 'text-emerald-400'
+                  : s === 'fail' ? 'text-red-400'
+                  : saving ? 'text-amber-400'
+                  : 'text-[var(--text-secondary)]';
+                const mark = s === 'ok' ? '✓' : s === 'fail' ? '✗' : saving ? '…' : '•';
+                return (
+                  <span key={e} className={color}>
+                    {i > 0 && <span className="text-[var(--text-tertiary)] mx-1">|</span>}
+                    {e} {mark}
+                  </span>
+                );
+              })}
+            </span>
             {errorMsg && (
-              <span className="ml-3 text-red-400 text-xs">{errorMsg}</span>
+              <div className="mt-1 text-red-400 text-xs max-w-3xl">{errorMsg}</div>
             )}
           </div>
           <div className="flex gap-2">

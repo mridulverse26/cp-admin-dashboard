@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { broadcastFeatureFlagPatch, type EnvResult } from '@/lib/multi-env';
 
 export function useOverview() {
   return useQuery({
@@ -638,14 +639,35 @@ export function useCenterFeatureFlags(centerId: string | undefined) {
   });
 }
 
+// Broadcast feature-flag PATCHes across prod/uat/demo with all-or-nothing
+// semantics. The error this throws on partial failure carries a `results`
+// field so the UI can show per-env status without reparsing the message.
+export class BroadcastError extends Error {
+  results: EnvResult<CenterFeatureFlagsResponse>[];
+  constructor(message: string, results: EnvResult<CenterFeatureFlagsResponse>[]) {
+    super(message);
+    this.name = 'BroadcastError';
+    this.results = results;
+  }
+}
+
 export function usePatchCenterFeatureFlags() {
   const queryClient = useQueryClient();
   return async (centerId: string, flags: Record<string, boolean>, changedBy?: string) => {
-    const result = await api
-      .patch(`/centers/${centerId}/feature-flags`, { flags, changedBy })
-      .then(r => r.data.data as CenterFeatureFlagsResponse);
+    const { allOk, results, primaryResponse } = await broadcastFeatureFlagPatch(
+      centerId,
+      flags,
+      changedBy,
+    );
+    if (!allOk || !primaryResponse) {
+      const failures = results.filter((r) => !r.ok).map((r) => `${r.env}: ${r.error ?? 'failed'}`);
+      throw new BroadcastError(
+        `Broadcast failed (reverted where possible). ${failures.join(' | ')}`,
+        results,
+      );
+    }
     queryClient.invalidateQueries({ queryKey: ['admin-center-feature-flags', centerId] });
     queryClient.invalidateQueries({ queryKey: ['admin-feature-flags-summary'] });
-    return result;
+    return primaryResponse;
   };
 }
