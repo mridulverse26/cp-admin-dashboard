@@ -1,6 +1,19 @@
-import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { broadcastFeatureFlagPatch, type EnvResult } from '@/lib/multi-env';
+import {
+  billingApi,
+  broadcastBillingMutation,
+  envClient,
+  type EnvKey,
+} from '@/lib/billing-api';
+import {
+  setSession,
+  setStepUp,
+  clearStepUp,
+  getSession,
+  type BillingSession,
+} from '@/lib/billing-auth';
 
 export function useOverview() {
   return useQuery({
@@ -671,3 +684,257 @@ export function usePatchCenterFeatureFlags() {
     return primaryResponse;
   };
 }
+
+// ============================================================================
+// BILLING HOOKS — admin tier with per-admin login + TOTP + step-up
+// ============================================================================
+
+export interface BillingLoginResponse {
+  stage: 'totp-required' | 'totp-enrollment-required';
+  ticket: string;
+  qrDataUrl?: string;
+}
+
+export interface BillingTotpVerifyResponse {
+  token: string;
+  expiresAt: string;
+  backupCodes?: string[];
+  admin: { id: string; email: string; displayName: string };
+}
+
+/** Step 1: email + password → returns ticket + (for first-time) a TOTP QR code. */
+export function useBillingLogin() {
+  return useMutation({
+    mutationFn: async (input: { email: string; password: string }) => {
+      const r = await billingApi.post<{ success: true; data: BillingLoginResponse }>(
+        '/billing/admin/login',
+        input,
+      );
+      return r.data.data;
+    },
+  });
+}
+
+/** Step 2: ticket + TOTP → returns session token (+ backup codes on first enrollment). */
+export function useBillingVerifyTotp() {
+  return useMutation({
+    mutationFn: async (input: { ticket: string; code: string }) => {
+      const r = await billingApi.post<{ success: true; data: BillingTotpVerifyResponse }>(
+        '/billing/admin/verify-totp',
+        input,
+      );
+      const session: BillingSession = {
+        token: r.data.data.token,
+        expiresAt: r.data.data.expiresAt,
+        admin: r.data.data.admin,
+      };
+      setSession(session);
+      return r.data.data;
+    },
+  });
+}
+
+/** Step-up: TOTP → returns step-up token (5min) and stores it. */
+export function useBillingStepUp() {
+  return useMutation({
+    mutationFn: async (code: string) => {
+      const r = await billingApi.post<{
+        success: true;
+        data: { stepUpToken: string; expiresAt: string };
+      }>('/billing/admin/step-up', { code });
+      setStepUp({ token: r.data.data.stepUpToken, expiresAt: r.data.data.expiresAt });
+      return r.data.data;
+    },
+  });
+}
+
+export interface BillingSubscriptionSnapshot {
+  centerId: string;
+  centerName: string;
+  slug: string;
+  subscription: {
+    id: string;
+    planTier: 'teaching' | 'thinking' | 'assessment' | 'custom';
+    status: 'trialing' | 'created' | 'active' | 'past_due' | 'suspended' | 'cancelled' | 'expired';
+    chargeMethod: 'subscription' | 'payment_link' | 'offline';
+    unitAmountPaise: number;
+    quantity: number;
+    currentPeriodEnd: string | null;
+    trialEndsAt: string | null;
+  };
+  activeStudentCount: number;
+  computedMonthlyBillPaise: number;
+  featureFlags: Record<string, boolean>;
+}
+
+/** Read subscription snapshot from prod (the source-of-truth read path).
+ *  For broadcasted writes, we fan out across envs separately. */
+export function useBillingSubscription(slug: string | undefined) {
+  return useQuery({
+    queryKey: ['billing-subscription', slug],
+    queryFn: async () => {
+      const r = await billingApi.get<{ success: true; data: BillingSubscriptionSnapshot }>(
+        `/billing/admin/centers/${slug}/subscription`,
+      );
+      return r.data.data;
+    },
+    enabled: !!slug && !!getSession(),
+  });
+}
+
+export type BillingAction =
+  | 'update_rate'
+  | 'update_features'
+  | 'change_plan_tier'
+  | 'suspend_tenant'
+  | 'reactivate_tenant'
+  | 'cancel_subscription'
+  | 'issue_refund'
+  | 'rotate_webhook_secret'
+  | 'extend_trial';
+
+export interface ProposeChangeInput {
+  slug: string;
+  action: BillingAction;
+  payload: Record<string, any>;
+  reason?: string;
+}
+
+/**
+ * Propose a subscription change, broadcast demo → uat → prod.
+ * Caller passes onBeforeProd to optionally show a 30-second cancel window.
+ */
+export function useBillingProposeChange() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: ProposeChangeInput & {
+        onBeforeProd?: () => Promise<boolean>;
+        onEnvProgress?: (env: EnvKey, ok: boolean, error?: string) => void;
+      },
+    ) => {
+      const { slug, action, payload, reason, onBeforeProd, onEnvProgress } = input;
+      return broadcastBillingMutation<any>(
+        (client) =>
+          client.patch(`/billing/admin/centers/${slug}/subscription`, {
+            action,
+            payload,
+            reason,
+          }),
+        { onBeforeProd, onEnvProgress },
+      );
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['billing-subscription', vars.slug] });
+      queryClient.invalidateQueries({ queryKey: ['billing-change-requests'] });
+    },
+  });
+}
+
+/** Pending change request inbox — pulled from prod only. */
+export function useBillingPendingChangeRequests() {
+  return useQuery({
+    queryKey: ['billing-change-requests'],
+    queryFn: async () => {
+      const r = await billingApi.get<{ success: true; data: any[] }>(
+        '/billing/admin/change-requests',
+      );
+      return r.data.data;
+    },
+    enabled: !!getSession(),
+    refetchInterval: 30000,
+  });
+}
+
+/** Approve a change request — broadcast to all 3 envs (each env has its own
+ *  pending row). */
+export function useBillingApproveChangeRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      onBeforeProd?: () => Promise<boolean>;
+      onEnvProgress?: (env: EnvKey, ok: boolean, error?: string) => void;
+    }) => {
+      return broadcastBillingMutation<any>(
+        (client) => client.post(`/billing/admin/change-requests/${input.id}/approve`),
+        { onBeforeProd: input.onBeforeProd, onEnvProgress: input.onEnvProgress },
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing-change-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['billing-subscription'] });
+    },
+  });
+}
+
+export function useBillingRejectChangeRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; reason: string }) => {
+      const results: EnvResult<any>[] = [];
+      for (const env of ['demo', 'uat', 'prod'] as EnvKey[]) {
+        try {
+          const r = await envClient(env).post(
+            `/billing/admin/change-requests/${input.id}/reject`,
+            { reason: input.reason },
+          );
+          results.push({ env, ok: true, data: r.data.data });
+        } catch (e) {
+          const err = e as { response?: { data?: { message?: string } }; message?: string };
+          results.push({ env, ok: false, error: err?.response?.data?.message ?? err?.message });
+        }
+      }
+      return { allOk: results.every((r) => r.ok), results };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing-change-requests'] });
+    },
+  });
+}
+
+export function useBillingAuditLog(filter?: {
+  coachingCenterId?: string;
+  actorAdminId?: string;
+  eventType?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  return useQuery({
+    queryKey: ['billing-audit-log', filter],
+    queryFn: async () => {
+      const r = await billingApi.get<{
+        success: true;
+        data: any[];
+        meta: { total: number };
+      }>('/billing/admin/audit-log', { params: filter });
+      return { rows: r.data.data, total: r.data.meta.total };
+    },
+    enabled: !!getSession(),
+  });
+}
+
+export function useBillingPreviewPreset() {
+  return useMutation({
+    mutationFn: async (input: {
+      slug: string;
+      preset: 'teaching' | 'thinking' | 'assessment';
+    }) => {
+      const r = await billingApi.post<{
+        success: true;
+        data: {
+          slug: string;
+          currentFlags: Record<string, boolean>;
+          proposedFlags: Record<string, boolean>;
+          currentRatePaise: number;
+          suggestedRatePaise: number;
+        };
+      }>(`/billing/admin/centers/${input.slug}/subscription/preview-preset`, {
+        preset: input.preset,
+      });
+      return r.data.data;
+    },
+  });
+}
+
+export { clearStepUp };
