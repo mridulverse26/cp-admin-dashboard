@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { broadcastFeatureFlagPatch, type EnvResult } from '@/lib/multi-env';
 
 export function useOverview() {
   return useQuery({
@@ -569,5 +570,104 @@ export function usePatchAdminQuestionReview() {
     queryClient.invalidateQueries({ queryKey: ['admin-bank-questions'] });
     queryClient.invalidateQueries({ queryKey: ['admin-bank-questions-stats'] });
     return result;
+  };
+}
+
+/* ────────────────── Per-tenant feature flags ────────────────── */
+
+export type FeatureFlagModuleKey =
+  | 'teachingPlan'
+  | 'resources'
+  | 'mcq'
+  | 'theory'
+  | 'dpp'
+  | 'homework'
+  | 'questionBank'
+  | 'doubts'
+  | 'parentReports'
+  | 'fees'
+  | 'leaderboard';
+
+export type FeatureFlagKey = `module.${FeatureFlagModuleKey}`;
+
+export interface FeatureFlagModuleDefinition {
+  key: FeatureFlagModuleKey;
+  flagKey: FeatureFlagKey;
+  label: string;
+  description: string;
+  group: 'daily' | 'assessments' | 'manage' | 'student';
+  defaultEnabled: boolean;
+  legacyKeys?: string[];
+}
+
+export interface CenterFeatureFlagsResponse {
+  centerId: string;
+  centerName: string;
+  centerSlug: string;
+  flags: Record<FeatureFlagKey, boolean>;
+  catalog: {
+    modules: FeatureFlagModuleDefinition[];
+    groups: { key: string; label: string; order: number }[];
+  };
+  lastChange: { changedBy: string; changedKeys: string[]; createdAt: string } | null;
+}
+
+export interface CenterFlagsSummary {
+  centerId: string;
+  centerName: string;
+  centerSlug: string;
+  enabledCount: number;
+  totalCount: number;
+  disabledModules: FeatureFlagModuleKey[];
+  lastChange: { changedBy: string; createdAt: string } | null;
+}
+
+export function useFeatureFlagSummaries() {
+  return useQuery<CenterFlagsSummary[]>({
+    queryKey: ['admin-feature-flags-summary'],
+    queryFn: () => api.get('/feature-flags').then(r => r.data.data),
+    staleTime: 60_000,
+  });
+}
+
+export function useCenterFeatureFlags(centerId: string | undefined) {
+  return useQuery<CenterFeatureFlagsResponse>({
+    queryKey: ['admin-center-feature-flags', centerId],
+    queryFn: () =>
+      api.get(`/centers/${centerId}/feature-flags`).then(r => r.data.data),
+    enabled: !!centerId,
+  });
+}
+
+// Broadcast feature-flag PATCHes across prod/uat/demo with all-or-nothing
+// semantics. The error this throws on partial failure carries a `results`
+// field so the UI can show per-env status without reparsing the message.
+export class BroadcastError extends Error {
+  results: EnvResult<CenterFeatureFlagsResponse>[];
+  constructor(message: string, results: EnvResult<CenterFeatureFlagsResponse>[]) {
+    super(message);
+    this.name = 'BroadcastError';
+    this.results = results;
+  }
+}
+
+export function usePatchCenterFeatureFlags() {
+  const queryClient = useQueryClient();
+  return async (centerId: string, flags: Record<string, boolean>, changedBy?: string) => {
+    const { allOk, results, primaryResponse } = await broadcastFeatureFlagPatch(
+      centerId,
+      flags,
+      changedBy,
+    );
+    if (!allOk || !primaryResponse) {
+      const failures = results.filter((r) => !r.ok).map((r) => `${r.env}: ${r.error ?? 'failed'}`);
+      throw new BroadcastError(
+        `Broadcast failed (reverted where possible). ${failures.join(' | ')}`,
+        results,
+      );
+    }
+    queryClient.invalidateQueries({ queryKey: ['admin-center-feature-flags', centerId] });
+    queryClient.invalidateQueries({ queryKey: ['admin-feature-flags-summary'] });
+    return primaryResponse;
   };
 }

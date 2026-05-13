@@ -7,8 +7,8 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  S3_BUCKET: classpulse-admin
-  CLOUDFRONT_DISTRIBUTION_ID: ERLXSY925DWR3
+  S3_BUCKET: cp-admin-snp
+  CLOUDFRONT_DISTRIBUTION_ID: ENQROJD100ULX
 
 jobs:
   deploy:
@@ -29,6 +29,12 @@ jobs:
         env:
           VITE_API_URL: https://api.classpulseai.com/api/v1/admin
           VITE_ADMIN_KEY: ${{ secrets.VITE_ADMIN_KEY }}
+          # Per-env API hosts for feature-flag broadcast across prod/uat/demo
+          # (see src/lib/multi-env.ts). Defaults are hardcoded in that file
+          # too — these vars just make the deploy explicit/auditable.
+          VITE_API_URL_PROD: https://app-api.classpulseai.com
+          VITE_API_URL_UAT: https://uat-api.classpulseai.com
+          VITE_API_URL_DEMO: https://demo-api.classpulseai.com
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:

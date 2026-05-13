@@ -13,6 +13,8 @@ import { RequestsPage } from '@/pages/requests';
 import { AiUsagePage } from '@/pages/ai-usage';
 import { StoragePage } from '@/pages/storage';
 import { ExpenditurePage } from '@/pages/expenditure';
+import { FeatureFlagsPage } from '@/pages/feature-flags';
+import { FeatureFlagsDetailPage } from '@/pages/feature-flags-detail';
 import { SystemHealthPage } from '@/pages/system-health';
 
 const queryClient = new QueryClient({
@@ -48,6 +50,8 @@ export default function App() {
             <Route path="ai" element={<AiUsagePage />} />
             <Route path="storage" element={<StoragePage />} />
             <Route path="expenditure" element={<ExpenditurePage />} />
+            <Route path="feature-flags" element={<FeatureFlagsPage />} />
+            <Route path="feature-flags/:id" element={<FeatureFlagsDetailPage />} />
             <Route path="system" element={<SystemHealthPage />} />
             </Route>
           </Routes>
