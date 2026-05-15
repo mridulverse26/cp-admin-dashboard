@@ -1,7 +1,31 @@
 import { Check, KeyRound, Sparkles } from 'lucide-react';
 import type { ParsedMcq, ParsedMcqTags } from '@/hooks/use-admin';
 
-export function AnswerSourceBadge({ source }: { source: 'key' | 'ai' | 'manual' | null }) {
+// Real `answer_source` values found in the prod DB as of 2026-05-16
+// (SELECT DISTINCT answer_source FROM ast_question_bank):
+//   key, ai, ai-high, ai-low, ai_review, answer_key, pdf
+// The original component only knew 'key' | 'ai' | 'manual' — anything else
+// triggered "Cannot read properties of undefined (reading 'Icon')" and crashed
+// the entire /questions admin page. Normalizing into 3 visual buckets +
+// graceful fallback for genuinely unknown values keeps the badge cheap.
+const ANSWER_SOURCE_BUCKETS: Record<string, 'key' | 'ai' | 'manual'> = {
+  key: 'key',
+  answer_key: 'key',
+  pdf: 'key',           // pdf-extracted answer keys
+  ai: 'ai',
+  'ai-high': 'ai',
+  'ai-low': 'ai',
+  ai_review: 'ai',
+  manual: 'manual',
+};
+
+const ANSWER_SOURCE_STYLES = {
+  key: { bg: 'bg-[#22c55e18]', fg: 'text-[#22c55e]', Icon: KeyRound, label: 'Answer key' },
+  ai: { bg: 'bg-[#f59e0b18]', fg: 'text-[#f59e0b]', Icon: Sparkles, label: 'AI predicted' },
+  manual: { bg: 'bg-[#6366f118]', fg: 'text-[#818cf8]', Icon: Check, label: 'Manual' },
+} as const;
+
+export function AnswerSourceBadge({ source }: { source: string | null }) {
   if (!source) {
     return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-shell)] text-[var(--text-tertiary)]">
@@ -9,11 +33,17 @@ export function AnswerSourceBadge({ source }: { source: 'key' | 'ai' | 'manual' 
       </span>
     );
   }
-  const styles = {
-    key: { bg: 'bg-[#22c55e18]', fg: 'text-[#22c55e]', Icon: KeyRound, label: 'Answer key' },
-    ai: { bg: 'bg-[#f59e0b18]', fg: 'text-[#f59e0b]', Icon: Sparkles, label: 'AI predicted' },
-    manual: { bg: 'bg-[#6366f118]', fg: 'text-[#818cf8]', Icon: Check, label: 'Manual' },
-  }[source];
+  const bucket = ANSWER_SOURCE_BUCKETS[source];
+  if (!bucket) {
+    // Unknown source — render the raw value as a neutral chip rather than crash.
+    // If we see this in the wild, add the value to ANSWER_SOURCE_BUCKETS above.
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-shell)] text-[var(--text-tertiary)]">
+        {source}
+      </span>
+    );
+  }
+  const styles = ANSWER_SOURCE_STYLES[bucket];
   const Icon = styles.Icon;
   return (
     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${styles.bg} ${styles.fg}`}>
