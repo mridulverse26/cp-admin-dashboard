@@ -27,7 +27,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_API_URL: https://api.classpulseai.com/api/v1/admin
+          VITE_API_URL: https://app-api.classpulseai.com/api/v1/admin
           VITE_ADMIN_KEY: ${{ secrets.VITE_ADMIN_KEY }}
           # Per-env API hosts for feature-flag broadcast across prod/uat/demo
           # (see src/lib/multi-env.ts). Defaults are hardcoded in that file
