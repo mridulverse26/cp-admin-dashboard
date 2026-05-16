@@ -1,4 +1,5 @@
-import { Check, KeyRound, Sparkles } from 'lucide-react';
+import { Check, Copy, KeyRound, Sparkles } from 'lucide-react';
+import { useState } from 'react';
 import type { ParsedMcq, ParsedMcqTags } from '@/hooks/use-admin';
 
 // Real `answer_source` values found in the prod DB as of 2026-05-16
@@ -50,6 +51,35 @@ export function AnswerSourceBadge({ source }: { source: string | null }) {
       <Icon size={10} />
       {styles.label}
     </span>
+  );
+}
+
+// Compact copyable chip showing a short prefix of a question's DB uuid.
+// Click → full uuid on clipboard so a coworker can paste it anywhere
+// (Slack, ticket, SQL query) and refer to a stable identifier instead
+// of the position-on-page Q-number.
+export function QuestionIdChip({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard blocked (insecure context / browser perms) — noop
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? 'Copied!' : `Copy id: ${id}`}
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[var(--text-tertiary)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+    >
+      <span>{id.slice(0, 8)}</span>
+      {copied ? <Check size={10} /> : <Copy size={10} />}
+    </button>
   );
 }
 
@@ -115,9 +145,11 @@ interface QuestionCardProps {
   header?: React.ReactNode;
   /** Optional image URL — rendered between the stem and options */
   imageUrl?: string | null;
+  /** Stable DB id (uuid). Renders as a copyable chip so coworkers can reference rows. */
+  questionId?: string;
 }
 
-export function QuestionCard({ q, header, imageUrl }: QuestionCardProps) {
+export function QuestionCard({ q, header, imageUrl, questionId }: QuestionCardProps) {
   return (
     <div className="bg-[var(--bg-shell)] border border-[var(--border)] rounded-lg p-4">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -125,6 +157,7 @@ export function QuestionCard({ q, header, imageUrl }: QuestionCardProps) {
           <span className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
             Q{q.number}
           </span>
+          {questionId && <QuestionIdChip id={questionId} />}
           <AnswerSourceBadge source={q.answerSource} />
         </div>
         {header}

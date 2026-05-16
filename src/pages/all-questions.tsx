@@ -543,7 +543,11 @@ export function AllQuestionsPage() {
                     }
                   />
                 </div>
-                <QuestionCard q={questionToParsed(q, i + 1)} imageUrl={q.figureS3Url} />
+                <QuestionCard
+                  q={questionToParsed(q, i + 1)}
+                  questionId={q.id}
+                  imageUrl={q.figureS3Url}
+                />
               </div>
             );
           })}
