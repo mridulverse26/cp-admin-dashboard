@@ -9,6 +9,8 @@ import {
   Filter as FilterIcon,
   Image as ImageIcon,
   RefreshCw,
+  Trash2,
+  X,
 } from 'lucide-react';
 import {
   useAdminQuestions,
@@ -16,6 +18,7 @@ import {
   useAdminQuestionsFilterOptions,
   usePatchAdminQuestionReview,
   useCenters,
+  useBulkSoftDeleteAdminQuestions,
 } from '@/hooks/use-admin';
 import type {
   AdminBankQuestion,
@@ -226,6 +229,19 @@ export function AllQuestionsPage() {
   const [searchDraft, setSearchDraft] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [reviewStatusOverrides, setReviewStatusOverrides] = useState<Record<string, AdminReviewStatus>>({});
+
+  // Bulk-select + bulk-soft-delete state.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const bulkDelete = useBulkSoftDeleteAdminQuestions();
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const clearSelection = () => setSelectedIds(new Set());
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -519,10 +535,27 @@ export function AllQuestionsPage() {
         <div className="space-y-3">
           {items.map((q, i) => {
             const currentReview = reviewStatusOverrides[q.id] ?? q.reviewStatus;
+            const isSelected = selectedIds.has(q.id);
             return (
-              <div key={q.id} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-4">
+              <div
+                key={q.id}
+                className={`bg-[var(--bg-card)] border rounded-xl p-4 transition-colors ${
+                  isSelected
+                    ? 'border-[var(--accent)] bg-[var(--bg-card-hover)]'
+                    : 'border-[var(--border)]'
+                }`}
+              >
                 <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
-                  <ProvenanceLine q={q} />
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(q.id)}
+                      className="mt-0.5 h-4 w-4 cursor-pointer accent-[var(--accent)]"
+                      aria-label={`Select question ${q.id.slice(0, 8)}`}
+                    />
+                    <ProvenanceLine q={q} />
+                  </div>
                   <ReviewStatusDropdown
                     questionId={q.id}
                     current={currentReview}
@@ -563,6 +596,83 @@ export function AllQuestionsPage() {
               All {items.length} question{items.length === 1 ? '' : 's'} loaded
             </span>
           )}
+        </div>
+      )}
+
+      {/* Bulk-action bar — sticky at the bottom when 1+ row is selected. */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] shadow-2xl">
+          <span className="text-[13px] font-semibold text-[var(--text-primary)]">
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={clearSelection}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)] transition-colors"
+          >
+            <X size={12} />
+            Clear
+          </button>
+          <button
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={bulkDelete.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors disabled:opacity-50"
+          >
+            <Trash2 size={12} />
+            Soft-delete {selectedIds.size}
+          </button>
+        </div>
+      )}
+
+      {/* Confirm modal */}
+      {confirmDeleteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => !bulkDelete.isPending && setConfirmDeleteOpen(false)}
+        >
+          <div
+            className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2">
+              Soft-delete {selectedIds.size} question{selectedIds.size === 1 ? '' : 's'}?
+            </h3>
+            <p className="text-[13px] text-[var(--text-secondary)] mb-4 leading-relaxed">
+              They'll be hidden from teachers and students immediately. Rows stay in
+              the database (reversible by clearing <code className="text-[11px] px-1 rounded bg-[var(--bg-shell)]">deleted_at</code> via
+              SQL). Cap: 5,000 per call — the server will return 400 otherwise.
+            </p>
+            {bulkDelete.error && (
+              <div className="text-[12px] text-red-400 mb-3">
+                {(bulkDelete.error as Error).message}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setConfirmDeleteOpen(false)}
+                disabled={bulkDelete.isPending}
+                className="px-3 py-1.5 rounded-md text-[12px] font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const ids = Array.from(selectedIds);
+                    await bulkDelete.mutateAsync(ids);
+                    clearSelection();
+                    setConfirmDeleteOpen(false);
+                  } catch {
+                    // error stays shown in the modal via bulkDelete.error
+                  }
+                }}
+                disabled={bulkDelete.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                <Trash2 size={12} />
+                {bulkDelete.isPending ? 'Deleting…' : 'Soft-delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
