@@ -40,6 +40,14 @@ const BLOCK_COMPONENTS: Components = {
   ),
 };
 
+// Q-014: 228 stems contain the literal token `<DIAGRAM>` that the OCR emits
+// when it detects but can't extract a figure. Replace with a visible "(figure
+// pending)" hint so the surrounding text still reads. Long-term fix is to
+// stop emitting the token at ingestion time — this only patches the display.
+function stripDiagramPlaceholder(text: string): string {
+  return text.replace(/<DIAGRAM>/g, '_(figure pending)_');
+}
+
 export function MathContent({ text, inline = false }: { text: string; inline?: boolean }) {
   if (!text) return null;
   return (
@@ -48,7 +56,7 @@ export function MathContent({ text, inline = false }: { text: string; inline?: b
       rehypePlugins={[rehypeKatex]}
       components={inline ? INLINE_COMPONENTS : BLOCK_COMPONENTS}
     >
-      {text}
+      {stripDiagramPlaceholder(text)}
     </ReactMarkdown>
   );
 }
