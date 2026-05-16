@@ -1,6 +1,7 @@
 import { Check, Copy, KeyRound, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import type { ParsedMcq, ParsedMcqTags } from '@/hooks/use-admin';
+import { MathContent } from '@/components/math-content';
 
 // Real `answer_source` values found in the prod DB as of 2026-05-16
 // (SELECT DISTINCT answer_source FROM ast_question_bank):
@@ -162,8 +163,8 @@ export function QuestionCard({ q, header, imageUrl, questionId }: QuestionCardPr
         </div>
         {header}
       </div>
-      <div className="text-[13px] text-[var(--text-primary)] leading-relaxed mb-3 whitespace-pre-wrap">
-        {q.stem}
+      <div className="text-[13px] text-[var(--text-primary)] leading-relaxed mb-3">
+        <MathContent text={q.stem} />
       </div>
       {imageUrl && (
         <div className="mb-3">
@@ -194,7 +195,7 @@ export function QuestionCard({ q, header, imageUrl, questionId }: QuestionCardPr
               >
                 {opt.letter}.
               </span>
-              <span className="flex-1">{opt.text}</span>
+              <span className="flex-1"><MathContent text={opt.text} inline /></span>
               {isCorrect && <Check size={13} className="text-[#22c55e] shrink-0 mt-0.5" />}
             </div>
           );
