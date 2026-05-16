@@ -586,6 +586,28 @@ export function usePatchAdminQuestionReview() {
   };
 }
 
+/**
+ * Admin bulk soft-delete — sends N ids to DELETE /admin/question-bank/bulk.
+ * Cross-tenant. Server caps at 5000 ids per call. Reversible (rows can be
+ * brought back by setting `deleted_at` to NULL via SQL).
+ */
+export function useBulkSoftDeleteAdminQuestions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      api
+        .delete<{ success: true; data: { deleted: number; requested: number } }>(
+          '/question-bank/bulk',
+          { data: { ids } },
+        )
+        .then(r => r.data.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-bank-questions'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-bank-questions-stats'] });
+    },
+  });
+}
+
 /* ────────────────── Per-tenant feature flags ────────────────── */
 
 export type FeatureFlagModuleKey =
