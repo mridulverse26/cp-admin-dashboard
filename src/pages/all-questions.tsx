@@ -25,7 +25,6 @@ import type {
 } from '@/hooks/use-admin';
 import { QuestionCard } from '@/components/question-card';
 
-const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD'] as const;
 const NATURES = ['CONCEPTUAL', 'NUMERICAL', 'FACTUAL', 'APPLICATION'] as const;
 const SOURCES = ['ai', 'manual', 'ocr', 'pyq-imported', 'system', 'teacher-upload', 'theory-pdf-upload'] as const;
 const REVIEW_STATUSES = ['AUTO_APPROVED', 'NEEDS_REVIEW', 'REJECTED'] as const;
@@ -416,12 +415,6 @@ export function AllQuestionsPage() {
               onChange={v => set('board', v as string | undefined)}
             />
             <SelectChip
-              label="Difficulty"
-              value={filters.difficulty}
-              options={DIFFICULTIES}
-              onChange={v => set('difficulty', v as 'EASY' | 'MEDIUM' | 'HARD' | undefined)}
-            />
-            <SelectChip
               label="Type"
               value={filters.questionType}
               options={QUESTION_TYPES}
@@ -502,14 +495,9 @@ export function AllQuestionsPage() {
               {s.subject} · {s.count}
             </span>
           ))}
-          {stats.data.byDifficulty.map(d => (
-            <span
-              key={d.difficulty}
-              className="px-2 py-0.5 rounded-full bg-[var(--bg-card-hover)] text-[var(--text-secondary)] text-[10px] font-semibold"
-            >
-              {d.difficulty} · {d.count}
-            </span>
-          ))}
+          {/* byDifficulty intentionally removed — we no longer surface difficulty
+              as a user-facing axis. Exam-tier breakdown (JEE / NEET / Boards) lives
+              in the stats endpoint and can be added here later if useful. */}
         </div>
       )}
 

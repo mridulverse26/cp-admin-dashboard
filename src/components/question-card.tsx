@@ -98,13 +98,13 @@ export function Tag({ label, value, color }: { label: string; value: string | nu
 
 export function TagsRow({ tags }: { tags: ParsedMcqTags }) {
   const items: { label: string; value: string | number; color: string }[] = [];
-  const diffColor =
-    tags.difficulty === 'EASY' ? '#22c55e' : tags.difficulty === 'HARD' ? '#ef4444' : '#f59e0b';
 
   if (tags.subject) items.push({ label: 'Subject', value: tags.subject, color: '#818cf8' });
   if (tags.topic) items.push({ label: 'Topic', value: tags.topic, color: '#818cf8' });
   if (tags.subTopic) items.push({ label: 'Sub-topic', value: tags.subTopic, color: '#a78bfa' });
-  if (tags.difficulty) items.push({ label: 'Difficulty', value: tags.difficulty, color: diffColor });
+  // Difficulty intentionally not surfaced — we use exam-tier (CBSE Boards / JEE / NEET)
+  // as the user-facing complexity signal. Difficulty stays in the DTO for internal use
+  // but is no longer shown on cards. See PROD discussion on 2026-05-16.
   if (tags.board) items.push({ label: 'Board', value: tags.board, color: '#22c55e' });
   if (tags.grade) items.push({ label: 'Grade', value: tags.grade, color: '#22c55e' });
   if (tags.nature) items.push({ label: 'Nature', value: tags.nature, color: '#06b6d4' });
