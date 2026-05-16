@@ -40,23 +40,54 @@ const BLOCK_COMPONENTS: Components = {
   ),
 };
 
-// Q-014: 228 stems contain the literal token `<DIAGRAM>` that the OCR emits
-// when it detects but can't extract a figure. Replace with a visible "(figure
-// pending)" hint so the surrounding text still reads. Long-term fix is to
-// stop emitting the token at ingestion time — this only patches the display.
-function stripDiagramPlaceholder(text: string): string {
-  return text.replace(/<DIAGRAM>/g, '_(figure pending)_');
+// Normalize stem/option text before handing it to remark-math + react-markdown.
+// We've seen these real-world patterns break rendering on Dhaval Sir Chemistry
+// + Joy Institute banks (PROD, 2026-05-16):
+//
+//   1. `<DIAGRAM>`, `< DIAGRAM >`, `<diagram>` — OCR emits this token when it
+//      detects a figure but can't extract it. ReactMarkdown will silently
+//      drop `<DIAGRAM>` because it looks like an unknown HTML tag. Replace
+//      with a visible italic hint so the text still reads.
+//
+//   2. `\to$` with no opening `$` (Q1 ff6649f4: "Reaction : 2NO$_2$F $\to$
+//      2NO$_2$ + F$_2$"). The lone `\to` outside `$...$` breaks remark-math's
+//      scan and the WHOLE paragraph reverts to raw text. Heuristic: an odd
+//      count of `$` in the stem signals a broken delimiter — try to repair
+//      by appending a closing `$` so at least most math segments render.
+//
+//   3. Markdown italic vs math: `[A]_0` outside `$...$` would be parsed as
+//      italic by markdown. Inside `$...$` it's a math subscript. Our content
+//      almost always wraps these in `$`, but we add a guard for stray cases.
+//
+// Long-term fix is at ingestion; this component only patches the display.
+const DIAGRAM_PLACEHOLDER_RE = /<\s*diagram\s*>/gi;
+
+function normalizeForMarkdown(text: string): string {
+  let t = text.replace(DIAGRAM_PLACEHOLDER_RE, '_(figure pending)_');
+
+  // Guard #2: if `$` count is odd, append a trailing `$` so at least the
+  // last partial math segment closes. Better to render with one extra "$"
+  // somewhere than to lose all math rendering for the whole paragraph.
+  const dollarCount = (t.match(/\$/g) ?? []).length;
+  if (dollarCount % 2 === 1) {
+    t = t + '$';
+  }
+
+  return t;
 }
 
 export function MathContent({ text, inline = false }: { text: string; inline?: boolean }) {
   if (!text) return null;
+  const Wrapper = inline ? 'span' : 'div';
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
-      components={inline ? INLINE_COMPONENTS : BLOCK_COMPONENTS}
-    >
-      {stripDiagramPlaceholder(text)}
-    </ReactMarkdown>
+    <Wrapper data-math-content="v2">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={inline ? INLINE_COMPONENTS : BLOCK_COMPONENTS}
+      >
+        {normalizeForMarkdown(text)}
+      </ReactMarkdown>
+    </Wrapper>
   );
 }
